@@ -1,39 +1,59 @@
-import pandas as pd
+import numpy as np
 import random
 from sklearn.utils import shuffle
 
-#Usé bucles(a mano) y csv, pandas es el más sencillo y el más elegante
+#Use bucles(a mano) y csv, pandas es el mas sencillo y el mas elegante
 
 #Lectura de datos
 
 print("Cargando datos...")
 #ecoli_set = pd.read_csv("data/ecoli_set.dat", delimiter=',', header=None)
-iris_set = pd.read_csv("data/iris_set.dat", delimiter=',', header=None)
+#cl_set = pd.read_csv("data/iris_set.dat", delimiter=',', header=None)
+
+cl_set = np.loadtxt("data/iris_set.dat", delimiter=',')
+
 #rand_set = pd.read_csv("data/rand_set.dat", delimiter=',', header=None)
 #ecoli_set_const_10 = pd.read_csv("data/ecoli_set_const_10.const", delimiter=',', header=None)
 #ecoli_set_const_20 = pd.read_csv("data/ecoli_set_const_20.const", delimiter=',', header=None)
-iris_set_const_10 = pd.read_csv("data/iris_set_const_10.const", delimiter=',', header=None)
-iris_set_const_20 = pd.read_csv("data/iris_set_const_20.const", delimiter=',', header=None)
+#cl_set_const_10 = pd.read_csv("data/iris_set_const_10.const", delimiter=',', header=None)
+#cl_set_const_20 = pd.read_csv("data/iris_set_const_20.const", delimiter=',', header=None)
 #rand_set_const_10 = pd.read_csv("data/rand_set_const_10.const", delimiter=',', header=None)
 #rand_set_const_20 = pd.read_csv("data/rand_set_const_20.const", delimiter=',', header=None)
 
 k=3
+dimension=4
 seed=532020
 random.seed(seed)
-iris_set=shuffle(iris_set)  #Este es el unico shuffle que funciona en matrices
-iris_set.reset_index(inplace=True, drop=True)
-min_x=int(min(iris_set[0]))
-min_y=int(min(iris_set[1]))
-max_x=int(max(iris_set[0]))
-max_y=int(max(iris_set[1]))
+#cl_set=shuffle(cl_set, random_state=seed)  #Este es el unico shuffle que funciona en matrices
+#cl_set.reset_index(inplace=True, drop=True)  #Cuidado con los shuffles, que las restricciones tb
+
+#Minimos y maximos
+
+minimos = []
+maximos = []
+
+for i in range(0,dimension):
+    minimos.append(int(min(cl_set[i])))
+    maximos.append(int(max(cl_set[i])))
 
 #Generar centroides
 
 centroides = []
 c = []
+
 for i in range(0,k):
-    centroides.append([random.randint(min_x, max_x), random.randint(min_y, max_y)])
+    aux = []
+    for j in range(0,dimension):
+        aux.append(random.randint(minimos[j], maximos[j]))
+    centroides.append(aux.copy())
     c.append([])
 
-print(c)
+#Funciones
+
+def recalcular_centroides(c, cl_set):
+    centroides = []
+    for i in range(0,len(c)):
+        centroides[i] = c[i].mean()
+
+print(cl_set)
 
