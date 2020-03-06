@@ -1,0 +1,11 @@
+https://ixora.io/itp/learning_machines/clustering-and-numpy/
+https://www.aprendemachinelearning.com/k-means-en-python-paso-a-paso/
+https://www.journaldev.com/32984/numpy-matrix-transpose-array
+https://docs.scipy.org/doc/numpy/reference/generated/numpy.dot.html
+https://www.oreilly.com/library/view/python-for-data/9781449323592/ch04.html
+https://www.datacamp.com/community/tutorials/python-numpy-tutorial?utm_source=adwords_ppc&utm_campaignid=898687156&utm_adgroupid=48947256715&utm_device=c&utm_keyword=&utm_matchtype=b&utm_network=g&utm_adpostion=&utm_creative=332602034349&utm_targetid=aud-299261629574:dsa-473406585115&utm_loc_interest_ms=&utm_loc_physical_ms=1005414&gclid=CjwKCAiA44LzBRB-EiwA-jJipPdR5-P0Q4frhennXkJw7c7E3gqJ3IsEc3MajnC3UTHpnN5GHl2dfhoCJDAQAvD_BwE
+https://www.analyticslane.com/2019/11/27/numpy-basico-como-anadir-elementos-en-arrays-de-numpy-con-np-append/
+https://realpython.com/numpy-array-programming/
+https://jakevdp.github.io/PythonDataScienceHandbook/02.02-the-basics-of-numpy-arrays.html
+https://docs.scipy.org/doc/numpy-1.15.0/user/quickstart.html#array-creation
+https://www.geeksforgeeks.org/python-numpy/
