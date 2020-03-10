@@ -7,7 +7,7 @@ using namespace std;
 
 void copkm(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, int k, vector<int> seed){
     
-    //Creacion de centroides aleatorios
+    // Creacion de centroides aleatorios
     
     cout << "Creando centroides iniciales..." << endl;
 
@@ -40,67 +40,104 @@ void copkm(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, i
        cout << endl;
    }
 
-   //Aplicamos el algoritmo
+   // Aplicamos el algoritmo
 
    cout << "Aplicando algoritmo Greedy COPKM..." << endl;
 
-   vector<pair<int, int> > c;
-   vector<pair<int, int> > nuevo_c;
-   vector<int> inf_actual;
-   pair<int,int> par;
-   int minimo_cl, minimos_ind_sec, aux_calc;
-   vector<int> minimos_ind;
+   vector<int> c_old;               // Asignación de clusters
+   vector<int> c;         // Asignación instantánea de clusters
+   vector<int> inf_actual;      // Infeasibility
+   float minimo_cl, aux_calc, distancia=0;   // Minima infeasibility
+   int minimo_ind;     // Indice de la minima infeasibility
 
-    //Mientras cambien los clusters aplicamos el algoritmo
+    // Mientras cambien los clusters aplicamos el algoritmo
    do{
-       nuevo_c = c;
+       c_old = c;
+       c.clear();
        //Introducir nodo en el mejor cluster
        for(int i=0; i<(*cl_set).size(); i++){
            inf_actual.clear();
            for(int j=0; j<k; j++) inf_actual.push_back(0);
 
             //Calcular infeasibility
-           for(int j=0; j<nuevo_c.size(); j++){
-                if((*cl_set_const)[i][nuevo_c[j].first] == -1 ) inf_actual[nuevo_c[j].second]++;
-                else if((*cl_set_const)[i][nuevo_c[j].first] == 1 ) for(int m=0; m<k; m++) if(m != nuevo_c[j].second) inf_actual[m]++;
+           for(int j=0; j<c.size(); j++){
+                if((*cl_set_const)[i][j] == -1 ) inf_actual[c[j]]++;
+                else if((*cl_set_const)[i][j] == 1 ) for(int m=0; m<k; m++) if(m != c[j]) inf_actual[m]++;
            }
+
+           /*for(int j=0;j<inf_actual.size();j++){
+               cout << "Inf " << j <<": " << inf_actual[j] << endl;
+           }
+           cout << endl;*/
 
             minimo_cl = inf_actual[0];
-            minimos_ind.push_back(0);
+            minimo_ind=0;
+            for(int j=0; j<centroides[0].size(); j++) distancia += pow(centroides[0][j]-(*cl_set)[i][j],2);
+            distancia = sqrt(distancia);
+
            //Escoger cluster
            for(int j=1; j<k ; j++){
-               if(inf_actual[j] < minimo_cl){
-                   minimos_ind.clear();
+               aux_calc = 0;
+               for(int l=0; l<centroides[0].size(); l++) aux_calc += pow(centroides[j][l]-(*cl_set)[i][j],2);
+               aux_calc = sqrt(aux_calc);
+               if((inf_actual[j] < minimo_cl) || ( (inf_actual[j] == minimo_cl) && (aux_calc < distancia) ) ){
                    minimo_cl = inf_actual[j];
-                   minimos_ind.push_back(j);
+                   minimo_ind = j;
+                   distancia = aux_calc;
                }
-               else if(inf_actual[j] == minimo_cl) minimos_ind.push_back(j);
            }
-           
-           //Si hay mas de un minimo, lo elegimos por distancia
-           if(minimos_ind.size() == 1) par = make_pair(i,minimos_ind[0]);
-           else{
-               minimos_ind_sec = minimos_ind[0];
-               for(int j=0; j<centroides[j].size(); j++) minimo_cl += pow((centroides[0][j]-(*cl_set)[minimos_ind_sec][j]), 2);
-               minimo_cl = sqrt(minimo_cl);
-               for(int j=1; j<minimos_ind.size(); j++){
-                   aux_calc = 0;
-                   for(int l=0; l<centroides[0].size(); l++) aux_calc += pow((centroides[j][l]-(*cl_set)[minimos_ind_sec][l]), 2);
-                   aux_calc = sqrt(aux_calc);
-                   if(aux_calc < minimo_cl){
-                       minimo_cl = aux_calc;
-                       minimos_ind_sec = j;
-                   }
-               }
-               par = make_pair(i, minimos_ind[minimos_ind_sec]);
-           }
-           nuevo_c.push_back(par);
+           c.push_back(minimo_ind);
        }
-       //Ajustar centroides
-       for(int i=0; i<k; i++){
 
-       }
-   }while(c != nuevo_c);
+       //Ajustar centroides
+       vector<float> contador;
+       for(int i=0; i<centroides.size(); i++) contador.push_back(0);
+       for(int i=0; i<c.size(); i++) contador[c[i]]++;
+
+       for(int i=0; i<centroides.size(); i++)
+            for(int j=0; j<centroides[0].size(); j++)
+                centroides[i][j] = 0;
+
+       for(int i=0; i<c.size(); i++)
+           for(int j=0; j<centroides[0].size(); j++)
+                centroides[c[i]][j] += (*cl_set)[i][j] * 1/contador[c[i]];
+
+        /*for(int i=0; i<centroides.size(); i++){
+            cout << "Centroide " << i << ": ";
+            for(int j=0; j<centroides[0].size(); j++) cout << centroides[i][j] << " ";
+                cout << endl << endl;
+        }
+
+        for(int i=0; i<c.size(); i++) cout << c[i] <<" ";
+        cout << endl << endl;*/
+
+   }while(c != c_old);
+
+    ofstream f("data/centroides.out");
+        for(int i=0; i<centroides.size(); i++){
+            for(int j=0; j<centroides[0].size(); j++){
+                f << centroides[i][j];
+                if(j != centroides[0].size()-1) f << ",";
+            }
+            f << endl;
+        }
+        f.close();
+        string ruta;
+        for(int i=0; i<k; i++){
+            ruta = "data/cluster" + to_string(i);
+            ruta = ruta + ".out";
+            f.open(ruta, ios_base::out);
+            for(int j=0; j<c.size(); j++){
+                if(c[j] == i){
+                    for(int l=0; l<centroides[0].size(); l++){
+                            f << (*cl_set)[j][l];
+                            if(l != centroides[0].size()-1) f << ",";
+                    }
+                    f << endl;
+                }
+            }
+            f.close();
+        }
 
 }
 
@@ -212,7 +249,7 @@ int main(int argc, char* argv[]){
     //Seleccion de algoritmo
 
     if(algoritmo==0){
-        srand(seed[0]);
+        //srand(seed[0]);
         //Hay que barajar conjuntamente el conjunto y las restricciones
         copkm(&cl_set, &cl_set_const, k, seed);
     }
