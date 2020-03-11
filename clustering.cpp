@@ -7,6 +7,8 @@ using namespace std;
 
 void copkm(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, int k, vector<int> seed){
     
+    // Barajar un vector de indices 0,1,...,cl_set.size() y luego explorar a partir de este vector
+    
     // Creacion de centroides aleatorios
     
     cout << "Creando centroides iniciales..." << endl;
@@ -34,11 +36,11 @@ void copkm(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, i
        centroides.push_back(aux_centro);
    }
    
-   for(int i=0; i<centroides.size(); i++){
+   /*for(int i=0; i<centroides.size(); i++){
        cout << "Centroide " << i << ": ";
        for(int j=0; j<centroides[i].size(); j++) cout << centroides[i][j] << " ";
        cout << endl;
-   }
+   }*/
 
    // Aplicamos el algoritmo
 
@@ -113,6 +115,8 @@ void copkm(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, i
 
    }while(c != c_old);
 
+   cout << "Escribiendo datos en salida..." << endl;
+
     ofstream f("data/centroides.out");
         for(int i=0; i<centroides.size(); i++){
             for(int j=0; j<centroides[0].size(); j++){
@@ -142,6 +146,44 @@ void copkm(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, i
 }
 
 void busqueda_local(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, int k, vector<int> seed){
+
+    //Crear solución aleatoria
+    
+    vector<int> c;
+    for(int i=0; i<(*cl_set).size();i++) c.push_back(rand()%k); //Comprobar que ningun cluster quede vacio
+
+    //Infleasibility en lista
+    vector<vector<int> > lista_const;
+    vector<int> aux_lista;
+    for(int i=0; i<(*cl_set).size();i++){
+        for(int j=0; j<(*cl_set).size();j++){
+            if((*cl_set_const)[i][j] == 1){
+                aux_lista.clear();
+                aux_lista.push_back(i);
+                aux_lista.push_back(j);
+                aux_lista.push_back(1);
+                lista_const.push_back(aux_lista);
+            }
+            else if((*cl_set_const)[i][j] == -1){
+                aux_lista.clear();
+                aux_lista.push_back(i);
+                aux_lista.push_back(j);
+                aux_lista.push_back(-1);
+                lista_const.push_back(aux_lista);
+            }
+        }
+    }
+
+    //Calcular f de solución aleatoria
+
+    int infleasibility = 0;
+    for(int i=0; i<c.size(); i++){
+        for(int j=i; j<c.size(); j++){
+            for(int l=0; l<lista_const.size();l++){
+                
+            }
+        }
+    }
 
 }
 
