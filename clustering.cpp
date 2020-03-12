@@ -3,11 +3,20 @@
 #include <vector>
 #include <stdlib.h>
 #include <cmath>
+#include <algorithm>
 using namespace std;
 
 void copkm(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, int k, vector<int> seed){
     
     // Barajar un vector de indices 0,1,...,cl_set.size() y luego explorar a partir de este vector
+
+    vector<int> indices;
+    for(int i=0; i < (*cl_set).size(); i++) indices.push_back(i);
+    srand(seed[0]);
+    random_shuffle(indices.begin(), indices.end());
+
+    /*for(int j=0;j<indices.size();j++) cout << indices[j] << " ";
+    cout << endl;*/
     
     // Creacion de centroides aleatorios
     
@@ -47,6 +56,7 @@ void copkm(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, i
    cout << "Aplicando algoritmo Greedy COPKM..." << endl;
 
    vector<int> c_old;               // Asignación de clusters
+   vector<int> aux_baraja;
    vector<int> c;         // Asignación instantánea de clusters
    vector<int> inf_actual;      // Infeasibility
    float minimo_cl, aux_calc, distancia=0;   // Minima infeasibility
@@ -63,8 +73,8 @@ void copkm(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, i
 
             //Calcular infeasibility
            for(int j=0; j<c.size(); j++){
-                if((*cl_set_const)[i][j] == -1 ) inf_actual[c[j]]++;
-                else if((*cl_set_const)[i][j] == 1 ) for(int m=0; m<k; m++) if(m != c[j]) inf_actual[m]++;
+                if((*cl_set_const)[indices[i]][j] == -1 ) inf_actual[c[j]]++;
+                else if((*cl_set_const)[indices[i]][j] == 1 ) for(int m=0; m<k; m++) if(m != c[j]) inf_actual[m]++;
            }
 
            /*for(int j=0;j<inf_actual.size();j++){
@@ -74,13 +84,13 @@ void copkm(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, i
 
             minimo_cl = inf_actual[0];
             minimo_ind=0;
-            for(int j=0; j<centroides[0].size(); j++) distancia += pow(centroides[0][j]-(*cl_set)[i][j],2);
+            for(int j=0; j<centroides[0].size(); j++) distancia += pow(centroides[0][j]-(*cl_set)[indices[i]][j],2);
             distancia = sqrt(distancia);
 
            //Escoger cluster
            for(int j=1; j<k ; j++){
                aux_calc = 0;
-               for(int l=0; l<centroides[0].size(); l++) aux_calc += pow(centroides[j][l]-(*cl_set)[i][j],2);
+               for(int l=0; l<centroides[0].size(); l++) aux_calc += pow(centroides[j][l]-(*cl_set)[indices[i]][j],2);
                aux_calc = sqrt(aux_calc);
                if((inf_actual[j] < minimo_cl) || ( (inf_actual[j] == minimo_cl) && (aux_calc < distancia) ) ){
                    minimo_cl = inf_actual[j];
@@ -90,6 +100,11 @@ void copkm(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, i
            }
            c.push_back(minimo_ind);
        }
+
+       //Reordeno por orden
+
+       aux_baraja = c;
+       for(int i=0; i<c.size(); i++) c[indices[i]] = aux_baraja[i];
 
        //Ajustar centroides
        vector<float> contador;
@@ -102,7 +117,11 @@ void copkm(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, i
 
        for(int i=0; i<c.size(); i++)
            for(int j=0; j<centroides[0].size(); j++)
-                centroides[c[i]][j] += (*cl_set)[i][j] * 1/contador[c[i]];
+                centroides[c[i]][j] += (*cl_set)[i][j];
+
+        for(int i=0; i<centroides.size(); i++)
+           for(int j=0; j<centroides[0].size(); j++)
+                centroides[i][j] /= contador[i];
 
         /*for(int i=0; i<centroides.size(); i++){
             cout << "Centroide " << i << ": ";
@@ -114,6 +133,8 @@ void copkm(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, i
         cout << endl << endl;*/
 
    }while(c != c_old);
+
+   // Escribir en salida
 
    cout << "Escribiendo datos en salida..." << endl;
 
@@ -147,10 +168,23 @@ void copkm(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, i
 
 void busqueda_local(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, int k, vector<int> seed){
 
+    cout << "Creando solucion inicial aleatoria..." << endl;
+
     //Crear solución aleatoria
     
     vector<int> c;
-    for(int i=0; i<(*cl_set).size();i++) c.push_back(rand()%k); //Comprobar que ningun cluster quede vacio
+    bool condicion;
+    srand(seed[0]);
+    do{
+        for(int i=0; i<(*cl_set).size(); i++) c.push_back(rand()%k);
+        condicion = count(c.begin(), c.end(), 0) == 0;
+        for(int i=1; i<k && !condicion; i++) condicion || count(c.begin(), c.end(), i) == 0;
+    }while(condicion);
+
+    /*for(int i=0; i<c.size(); i++){
+            cout << c[i] << " ";
+    }
+    cout << endl;*/
 
     //Infleasibility en lista
     vector<vector<int> > lista_const;
@@ -174,16 +208,85 @@ void busqueda_local(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set
         }
     }
 
-    //Calcular f de solución aleatoria
+    //Calculo de infesibility
 
     int infleasibility = 0;
     for(int i=0; i<c.size(); i++){
         for(int j=i; j<c.size(); j++){
             for(int l=0; l<lista_const.size();l++){
-                
+                if(lista_const[l][0] == i && lista_const[l][1] == j){
+                    if(c[i] == c[j] && lista_const[l][2] == -1) infleasibility++;
+                    if(c[i] != c[j] && lista_const[l][2] == 1) infleasibility++;
+                }
             }
         }
     }
+
+    //Calculo de centroides
+
+    vector<vector<float> > centroides;
+    vector<float> aux_centro;
+    for(int i=0; i<(*cl_set)[0].size(); i++) aux_centro.push_back(0);
+    for(int i=0; i<k; i++) centroides.push_back(aux_centro);
+
+    vector<float> contador;
+    for(int i=0; i<centroides.size(); i++) contador.push_back(0);
+    for(int i=0; i<c.size(); i++) contador[c[i]]++;
+
+    for(int i=0; i<c.size(); i++)
+        for(int j=0; j<centroides[0].size(); j++)
+            centroides[c[i]][j] += (*cl_set)[i][j];
+
+    for(int i=0; i<centroides.size(); i++)
+        for(int j=0; j<centroides[0].size(); j++)
+            centroides[i][j] = contador[i];
+
+    //Calculo de la distancia media intra-cluster
+
+    vector<float> dist_intracl;
+    for(int i=0; i<k; i++) dist_intracl.push_back(0);
+
+    float aux_calc;
+    for(int i=0; i<c.size();i++){
+        aux_calc = 0;
+        for(int j=0; j<centroides[0].size(); j++) aux_calc += pow(centroides[c[i]][j]-(*cl_set)[i][j],2);
+        dist_intracl[c[i]] = sqrt(aux_calc);
+    }
+    for(int i=0; i<k; i++) dist_intracl[i] /= contador[i];
+
+    //Calculo de la desviacion general
+
+    float desv_general = 0;
+    for(int i=0; i<k; i++) desv_general += dist_intracl[i];
+
+    desv_general /= k;
+
+    //Calculo de lambda
+
+    float distancia_max = 0;
+    for(int i=0; i<(*cl_set).size();i++){
+        for(int j=i; j<(*cl_set).size();j++){
+            aux_calc = 0;
+            for(int l=0; l<(*cl_set)[0].size(); l++) aux_calc += pow((*cl_set)[c[i]][l]-(*cl_set)[i][l],2);
+            aux_calc = sqrt(aux_calc);
+            if(aux_calc > distancia_max) distancia_max = (int)aux_calc + 1;
+        }
+    }
+
+
+    float lambda = distancia_max / (*cl_set).size();
+
+    //Calculo de f inicial
+
+    float funcion = desv_general + infleasibility * lambda;
+
+    //cout << funcion << endl;
+
+    cout << "Aplicando algoritmo de busqueda local..." << endl;
+
+    //Buscamos el primer mejor vecino hasta que no encontremos ninguno mejor
+
+
 
 }
 
