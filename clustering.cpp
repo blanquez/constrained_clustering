@@ -166,48 +166,7 @@ void copkm(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, i
 
 }
 
-void busqueda_local(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, int k, vector<int> seed){
-
-    cout << "Creando solucion inicial aleatoria..." << endl;
-
-    //Crear solución aleatoria
-    
-    vector<int> c;
-    bool condicion;
-    srand(seed[0]);
-    do{
-        for(int i=0; i<(*cl_set).size(); i++) c.push_back(rand()%k);
-        condicion = count(c.begin(), c.end(), 0) == 0;
-        for(int i=1; i<k && !condicion; i++) condicion || count(c.begin(), c.end(), i) == 0;
-    }while(condicion);
-
-    /*for(int i=0; i<c.size(); i++){
-            cout << c[i] << " ";
-    }
-    cout << endl;*/
-
-    //Infleasibility en lista
-    vector<vector<int> > lista_const;
-    vector<int> aux_lista;
-    for(int i=0; i<(*cl_set).size();i++){
-        for(int j=0; j<(*cl_set).size();j++){
-            if((*cl_set_const)[i][j] == 1){
-                aux_lista.clear();
-                aux_lista.push_back(i);
-                aux_lista.push_back(j);
-                aux_lista.push_back(1);
-                lista_const.push_back(aux_lista);
-            }
-            else if((*cl_set_const)[i][j] == -1){
-                aux_lista.clear();
-                aux_lista.push_back(i);
-                aux_lista.push_back(j);
-                aux_lista.push_back(-1);
-                lista_const.push_back(aux_lista);
-            }
-        }
-    }
-
+float calcular_f(vector<vector<float> >* cl_set, vector<int> c, vector<vector<int> > lista_const, int k){
     //Calculo de infesibility
 
     int infleasibility = 0;
@@ -276,9 +235,54 @@ void busqueda_local(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set
 
     float lambda = distancia_max / (*cl_set).size();
 
+    return (desv_general + infleasibility * lambda);
+}
+
+void busqueda_local(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, int k, vector<int> seed){
+
+    cout << "Creando solucion inicial aleatoria..." << endl;
+
+    //Crear solución aleatoria
+    
+    vector<int> c;
+    bool condicion;
+    srand(seed[0]);
+    do{
+        for(int i=0; i<(*cl_set).size(); i++) c.push_back(rand()%k);
+        condicion = count(c.begin(), c.end(), 0) == 0;
+        for(int i=1; i<k && !condicion; i++) condicion || count(c.begin(), c.end(), i) == 0;
+    }while(condicion);
+
+    /*for(int i=0; i<c.size(); i++){
+            cout << c[i] << " ";
+    }
+    cout << endl;*/
+
+    //Infleasibility en lista
+    vector<vector<int> > lista_const;
+    vector<int> aux_lista;
+    for(int i=0; i<(*cl_set).size();i++){
+        for(int j=0; j<(*cl_set).size();j++){
+            if((*cl_set_const)[i][j] == 1){
+                aux_lista.clear();
+                aux_lista.push_back(i);
+                aux_lista.push_back(j);
+                aux_lista.push_back(1);
+                lista_const.push_back(aux_lista);
+            }
+            else if((*cl_set_const)[i][j] == -1){
+                aux_lista.clear();
+                aux_lista.push_back(i);
+                aux_lista.push_back(j);
+                aux_lista.push_back(-1);
+                lista_const.push_back(aux_lista);
+            }
+        }
+    }
+
     //Calculo de f inicial
 
-    float funcion = desv_general + infleasibility * lambda;
+    float f_ini = calcular_f(cl_set,c,lista_const,k);
 
     //cout << funcion << endl;
 
@@ -286,7 +290,28 @@ void busqueda_local(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set
 
     //Buscamos el primer mejor vecino hasta que no encontremos ninguno mejor
 
+    float f_act = f_ini;
+    int aux_func;
+    vector<int> c_aux;
 
+    //Falta contar hasta 100000 como limite y que no haya clusters vacios
+    do{
+        f_ini = f_act;
+
+        for(int i=0; i<c.size() && f_act>=f_ini;i++){
+            c_aux=c;
+            aux_func = (i+rand())%c.size();
+            c_aux[aux_func] = (c_aux[aux_func] + 1)%k;
+
+            f_act = calcular_f(cl_set,c_aux,lista_const,k);
+        }
+
+        cout << f_act << endl;
+
+        if(f_act<f_ini) c = c_aux;
+
+    }while(f_act<f_ini);
+    
 
 }
 
@@ -393,11 +418,7 @@ int main(int argc, char* argv[]){
 
     //Seleccion de algoritmo
 
-    if(algoritmo==0){
-        //srand(seed[0]);
-        //Hay que barajar conjuntamente el conjunto y las restricciones
-        copkm(&cl_set, &cl_set_const, k, seed);
-    }
+    if(algoritmo==0) copkm(&cl_set, &cl_set_const, k, seed);
     else busqueda_local(&cl_set, &cl_set_const, k, seed);
 
     return 0;
