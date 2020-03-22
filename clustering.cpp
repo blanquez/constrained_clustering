@@ -4,9 +4,93 @@
 #include <stdlib.h>
 #include <cmath>
 #include <algorithm>
+#include <time.h>
 using namespace std;
 
+float calcular_f(vector<vector<float> >* cl_set, vector<int> c, vector<vector<int> > lista_const, int k, float lambda, float* desviacion, int* infeas){
+    //Calculo de infesibility
+
+    int infeasibility = 0;
+
+    for(int i=0; i<lista_const.size();i++){
+        if(c[lista_const[i][0]] == c[lista_const[i][1]] && lista_const[i][2] == -1) infeasibility++;
+        if(c[lista_const[i][0]] != c[lista_const[i][1]] && lista_const[i][2] == 1) infeasibility++;
+    }
+
+    (*infeas) = infeasibility;
+    
+    //Calculo de centroides
+
+    vector<vector<float> > centroides;
+    vector<float> aux_centro;
+    for(int i=0; i<(*cl_set)[0].size(); i++) aux_centro.push_back(0);
+    for(int i=0; i<k; i++) centroides.push_back(aux_centro);
+
+    vector<float> contador;
+    for(int i=0; i<centroides.size(); i++) contador.push_back(0);
+    for(int i=0; i<c.size(); i++) contador[c[i]]++;
+
+    for(int i=0; i<c.size(); i++)
+        for(int j=0; j<centroides[0].size(); j++)
+            centroides[c[i]][j] += (*cl_set)[i][j];
+
+    for(int i=0; i<centroides.size(); i++)
+        for(int j=0; j<centroides[0].size(); j++)
+            centroides[i][j] /= contador[i];
+
+    //Calculo de la distancia media intra-cluster
+
+    vector<float> dist_intracl;
+    for(int i=0; i<k; i++) dist_intracl.push_back(0);
+
+    float aux_calc;
+    for(int i=0; i<c.size();i++){
+        aux_calc = 0;
+        for(int j=0; j<centroides[0].size(); j++) aux_calc += pow(centroides[c[i]][j]-(*cl_set)[i][j],2);
+        dist_intracl[c[i]] += pow(aux_calc,0.5);
+    }
+    for(int i=0; i<k; i++) dist_intracl[i] /= contador[i];
+
+    //Calculo de la desviacion general
+
+    float desv_general = 0;
+    for(int i=0; i<k; i++) desv_general += dist_intracl[i];
+
+    desv_general /= k;
+
+    (*desviacion) = desv_general;
+
+    return (desv_general + infeasibility * lambda);
+}
+
+
 void copkm(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, int k, vector<int> seed){
+
+    clock_t tiempo1, tiempo2;
+
+    //Infeasibility en lista
+    vector<vector<int> > lista_const;
+    vector<int> aux_lista;
+    for(int i=0; i<(*cl_set).size();i++){
+        for(int j=i+1; j<(*cl_set).size();j++){
+            if((*cl_set_const)[i][j] == 1){
+                aux_lista.clear();
+                aux_lista.push_back(i);
+                aux_lista.push_back(j);
+                aux_lista.push_back(1);
+                lista_const.push_back(aux_lista);
+            }
+            else if((*cl_set_const)[i][j] == -1){
+                aux_lista.clear();
+                aux_lista.push_back(i);
+                aux_lista.push_back(j);
+                aux_lista.push_back(-1);
+                lista_const.push_back(aux_lista);
+            }
+        }
+    }
+
+    tiempo1 = clock();
     
     // Barajar un vector de indices 0,1,...,cl_set.size() y luego explorar a partir de este vector
 
@@ -57,25 +141,57 @@ void copkm(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, i
 
    vector<int> c_old;               // Asignación de clusters
    vector<int> aux_baraja;
-   vector<int> c;         // Asignación instantánea de clusters
-   vector<int> inf_actual;      // Infeasibility
+   vector<int> c;                   // Asignación instantánea de clusters
+   vector<int> inf_actual;          // Infeasibility
    float minimo_cl, aux_calc, distancia=0;   // Minima infeasibility
-   int minimo_ind;     // Indice de la minima infeasibility
+   int minimo_ind, contador_fin=0;     // Indice de la minima infeasibility
 
     // Mientras cambien los clusters aplicamos el algoritmo
    do{
-       c_old = c;
-       c.clear();
+       //Control de clusters vacios
+       bool condicion_vacio = true;
+       if(!c_old.empty())
+       for(int i=0;i<k;i++){
+           if(count(c.begin(), c.end(), i) < 1){
+               condicion_vacio = false;
+               break;
+           }
+       }
+       if(condicion_vacio) c_old = c;
+       else{
+           c = c_old;
+           break;
+       }
+       //c.clear();
        //Introducir nodo en el mejor cluster
        for(int i=0; i<(*cl_set).size(); i++){
+           int i2 = indices[i];
            inf_actual.clear();
            for(int j=0; j<k; j++) inf_actual.push_back(0);
 
             //Calcular infeasibility
-           for(int j=0; j<c.size(); j++){
-                if((*cl_set_const)[indices[i]][j] == -1 ) inf_actual[c[j]]++;
-                else if((*cl_set_const)[indices[i]][j] == 1 ) for(int m=0; m<k; m++) if(m != c[j]) inf_actual[m]++;
-           }
+
+            if(c_old.empty()){
+                for(int j=0; j<c.size(); j++){
+                    if((*cl_set_const)[i2][j] == -1 ) inf_actual[c[j]]++;
+                    else if((*cl_set_const)[i2][j] == 1 ) for(int m=0; m<k; m++) if(m != c[j]) inf_actual[m]++;
+                }
+            }
+            else{
+                for(int j=0; j<k;j++){
+                    c[i2] = j;
+                    for(int l=0; l<lista_const.size();l++){
+                        if(c[lista_const[l][0]] == c[lista_const[l][1]] && lista_const[l][2] == -1) inf_actual[j]++;
+                        if(c[lista_const[l][0]] != c[lista_const[l][1]] && lista_const[l][2] == 1) inf_actual[j]++;
+                    }
+                }
+            }
+
+           /*for(int i=0; i<centroides.size(); i++){
+                 cout << "Centroide " << i << ": ";
+                for(int j=0; j<centroides[i].size(); j++) cout << centroides[i][j] << " ";
+                cout << endl;
+            }*/
 
            /*for(int j=0;j<inf_actual.size();j++){
                cout << "Inf " << j <<": " << inf_actual[j] << endl;
@@ -84,27 +200,31 @@ void copkm(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, i
 
             minimo_cl = inf_actual[0];
             minimo_ind=0;
-            for(int j=0; j<centroides[0].size(); j++) distancia += pow(centroides[0][j]-(*cl_set)[indices[i]][j],2);
-            distancia = sqrt(distancia);
+            for(int j=0; j<centroides[0].size(); j++) distancia += pow(centroides[0][j]-(*cl_set)[i2][j],2);
+            distancia = pow(distancia, 0.5);
 
            //Escoger cluster
            for(int j=1; j<k ; j++){
                aux_calc = 0;
-               for(int l=0; l<centroides[0].size(); l++) aux_calc += pow(centroides[j][l]-(*cl_set)[indices[i]][j],2);
-               aux_calc = sqrt(aux_calc);
+               for(int l=0; l<centroides[0].size(); l++) aux_calc += pow(centroides[j][l]-(*cl_set)[i2][j],2);
+               aux_calc = pow(aux_calc, 0.5);
                if((inf_actual[j] < minimo_cl) || ( (inf_actual[j] == minimo_cl) && (aux_calc < distancia) ) ){
                    minimo_cl = inf_actual[j];
                    minimo_ind = j;
                    distancia = aux_calc;
                }
            }
-           c.push_back(minimo_ind);
+           
+            if(c_old.empty()) c.push_back(minimo_ind);
+            else c[i2] = minimo_ind;
        }
 
        //Reordeno por orden
 
-       aux_baraja = c;
-       for(int i=0; i<c.size(); i++) c[indices[i]] = aux_baraja[i];
+        if(c_old.empty()){
+            aux_baraja = c;
+            for(int i=0; i<c.size(); i++) c[indices[i]] = aux_baraja[i];
+        }
 
        //Ajustar centroides
        vector<float> contador;
@@ -123,7 +243,42 @@ void copkm(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, i
            for(int j=0; j<centroides[0].size(); j++)
                 centroides[i][j] /= contador[i];
 
-        /*for(int i=0; i<centroides.size(); i++){
+        /*for(int i=0; i<c.size(); i++) cout << c[i] << " ";
+        cout << endl << endl;*/
+
+   }while(c != c_old);
+
+   tiempo2 = clock();
+
+    float distancia_max = 0;
+    for(int i=0; i<(*cl_set).size();i++){
+        for(int j=i+1; j<(*cl_set).size();j++){
+            aux_calc = 0;
+            for(int l=0; l<(*cl_set)[0].size(); l++) aux_calc += pow((*cl_set)[c[i]][l]-(*cl_set)[i][l],2);
+            aux_calc = pow(aux_calc, 0.5);
+            if(aux_calc > distancia_max) distancia_max = (int)aux_calc + 1;
+        }
+    }
+
+    float lambda = distancia_max / lista_const.size();
+
+    float desviacion;
+    int infeasibility;
+    for(int i=0; i<c.size(); i++) cout << c[i] << " ";
+        cout << endl << endl;
+    cout << lambda << endl;
+    float f = calcular_f(cl_set,c,lista_const,k,lambda,&desviacion,&infeasibility);
+
+    cout << "f: " << f << endl;
+    cout << "C/: " << desviacion << endl;
+    cout << "inf: " << infeasibility << endl;
+    cout << "tiempo: " << (float)tiempo2/CLOCKS_PER_SEC - (float)tiempo1/CLOCKS_PER_SEC;
+    if(contador_fin == 5000) cout << "*";
+    cout << endl;
+
+   
+
+   /*for(int i=0; i<centroides.size(); i++){
             cout << "Centroide " << i << ": ";
             for(int j=0; j<centroides[0].size(); j++) cout << centroides[i][j] << " ";
                 cout << endl << endl;
@@ -132,115 +287,15 @@ void copkm(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, i
         for(int i=0; i<c.size(); i++) cout << c[i] <<" ";
         cout << endl << endl;*/
 
-   }while(c != c_old);
-
-   // Escribir en salida
-
-   cout << "Escribiendo datos en salida..." << endl;
-
-    ofstream f("data/centroides.out");
-        for(int i=0; i<centroides.size(); i++){
-            for(int j=0; j<centroides[0].size(); j++){
-                f << centroides[i][j];
-                if(j != centroides[0].size()-1) f << ",";
-            }
-            f << endl;
-        }
-        f.close();
-        string ruta;
-        for(int i=0; i<k; i++){
-            ruta = "data/cluster" + to_string(i);
-            ruta = ruta + ".out";
-            f.open(ruta, ios_base::out);
-            for(int j=0; j<c.size(); j++){
-                if(c[j] == i){
-                    for(int l=0; l<centroides[0].size(); l++){
-                            f << (*cl_set)[j][l];
-                            if(l != centroides[0].size()-1) f << ",";
-                    }
-                    f << endl;
-                }
-            }
-            f.close();
-        }
-
-}
-
-float calcular_f(vector<vector<float> >* cl_set, vector<int> c, vector<vector<int> > lista_const, int k){
-    //Calculo de infesibility
-
-    int infleasibility = 0;
-    for(int i=0; i<c.size(); i++){
-        for(int j=i; j<c.size(); j++){
-            for(int l=0; l<lista_const.size();l++){
-                if(lista_const[l][0] == i && lista_const[l][1] == j){
-                    if(c[i] == c[j] && lista_const[l][2] == -1) infleasibility++;
-                    if(c[i] != c[j] && lista_const[l][2] == 1) infleasibility++;
-                }
-            }
-        }
-    }
-
-    //Calculo de centroides
-
-    vector<vector<float> > centroides;
-    vector<float> aux_centro;
-    for(int i=0; i<(*cl_set)[0].size(); i++) aux_centro.push_back(0);
-    for(int i=0; i<k; i++) centroides.push_back(aux_centro);
-
-    vector<float> contador;
-    for(int i=0; i<centroides.size(); i++) contador.push_back(0);
-    for(int i=0; i<c.size(); i++) contador[c[i]]++;
-
-    for(int i=0; i<c.size(); i++)
-        for(int j=0; j<centroides[0].size(); j++)
-            centroides[c[i]][j] += (*cl_set)[i][j];
-
-    for(int i=0; i<centroides.size(); i++)
-        for(int j=0; j<centroides[0].size(); j++)
-            centroides[i][j] = contador[i];
-
-    //Calculo de la distancia media intra-cluster
-
-    vector<float> dist_intracl;
-    for(int i=0; i<k; i++) dist_intracl.push_back(0);
-
-    float aux_calc;
-    for(int i=0; i<c.size();i++){
-        aux_calc = 0;
-        for(int j=0; j<centroides[0].size(); j++) aux_calc += pow(centroides[c[i]][j]-(*cl_set)[i][j],2);
-        dist_intracl[c[i]] = sqrt(aux_calc);
-    }
-    for(int i=0; i<k; i++) dist_intracl[i] /= contador[i];
-
-    //Calculo de la desviacion general
-
-    float desv_general = 0;
-    for(int i=0; i<k; i++) desv_general += dist_intracl[i];
-
-    desv_general /= k;
-
-    //Calculo de lambda
-
-    float distancia_max = 0;
-    for(int i=0; i<(*cl_set).size();i++){
-        for(int j=i; j<(*cl_set).size();j++){
-            aux_calc = 0;
-            for(int l=0; l<(*cl_set)[0].size(); l++) aux_calc += pow((*cl_set)[c[i]][l]-(*cl_set)[i][l],2);
-            aux_calc = sqrt(aux_calc);
-            if(aux_calc > distancia_max) distancia_max = (int)aux_calc + 1;
-        }
-    }
-
-
-    float lambda = distancia_max / (*cl_set).size();
-
-    return (desv_general + infleasibility * lambda);
 }
 
 void busqueda_local(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, int k, vector<int> seed){
 
+    time_t tiempo1, tiempo2;
+
     cout << "Creando solucion inicial aleatoria..." << endl;
+
+    tiempo1 = clock();
 
     //Crear solución aleatoria
     
@@ -248,6 +303,7 @@ void busqueda_local(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set
     bool condicion;
     srand(seed[0]);
     do{
+        c.clear();
         for(int i=0; i<(*cl_set).size(); i++) c.push_back(rand()%k);
         condicion = count(c.begin(), c.end(), 0) == 0;
         for(int i=1; i<k && !condicion; i++) condicion || count(c.begin(), c.end(), i) == 0;
@@ -258,11 +314,11 @@ void busqueda_local(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set
     }
     cout << endl;*/
 
-    //Infleasibility en lista
+    //Infeasibility en lista
     vector<vector<int> > lista_const;
     vector<int> aux_lista;
     for(int i=0; i<(*cl_set).size();i++){
-        for(int j=0; j<(*cl_set).size();j++){
+        for(int j=i+1; j<(*cl_set).size();j++){
             if((*cl_set_const)[i][j] == 1){
                 aux_lista.clear();
                 aux_lista.push_back(i);
@@ -280,38 +336,71 @@ void busqueda_local(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set
         }
     }
 
+    //Calculo de lambda
+
+    float distancia_max = 0, aux_calc;
+    for(int i=0; i<(*cl_set).size();i++){
+        for(int j=i+1; j<(*cl_set).size();j++){
+            aux_calc = 0;
+            for(int l=0; l<(*cl_set)[0].size(); l++) aux_calc += pow((*cl_set)[c[i]][l]-(*cl_set)[i][l],2);
+            aux_calc = pow(aux_calc, 0.5);
+            if(aux_calc > distancia_max) distancia_max = (int)aux_calc + 1;
+        }
+    }
+
+    // Parámetro de relevancia
+    int rel=8;
+
+    float lambda = distancia_max*rel / lista_const.size();
+    float desviacion, desv_temporal;
+    int infeasibility, infe_temporal;
+
     //Calculo de f inicial
 
-    float f_ini = calcular_f(cl_set,c,lista_const,k);
-
-    //cout << funcion << endl;
+    float f_ini = calcular_f(cl_set,c,lista_const,k,lambda,&desviacion,&infeasibility);
 
     cout << "Aplicando algoritmo de busqueda local..." << endl;
 
     //Buscamos el primer mejor vecino hasta que no encontremos ninguno mejor
 
     float f_act = f_ini;
-    int aux_func;
+    int aux_func, contador = 0;
     vector<int> c_aux;
 
-    //Falta contar hasta 100000 como limite y que no haya clusters vacios
+    cout << f_act << endl;
+
     do{
         f_ini = f_act;
+        int aleatorio = rand();
 
-        for(int i=0; i<c.size() && f_act>=f_ini;i++){
+        for(int i=0; i<c.size()*(k-1) && f_act>=f_ini ;i++){
             c_aux=c;
-            aux_func = (i+rand())%c.size();
-            c_aux[aux_func] = (c_aux[aux_func] + 1)%k;
+            aux_func = (i+aleatorio)%c.size();
+            c_aux[aux_func] = (c_aux[aux_func] + (i/c.size()+1))%k;
 
-            f_act = calcular_f(cl_set,c_aux,lista_const,k);
+            f_act = calcular_f(cl_set,c_aux,lista_const,k,lambda,&desv_temporal,&infe_temporal);
+            contador++;
         }
 
-        cout << f_act << endl;
+        //cout << f_act << endl;
 
-        if(f_act<f_ini) c = c_aux;
+        if(f_act<f_ini){
+            c = c_aux;
+            infeasibility = infe_temporal;
+            desviacion = desv_temporal;
+        }
 
-    }while(f_act<f_ini);
+    }while(f_act<f_ini && contador < 100000);
+
+    tiempo2 = clock();
+
+    cout << "f final: " << f_ini << endl;
+    cout << "c/: " << desviacion << endl;
+    cout << "infeasibility: " << infeasibility << endl;
+    cout << "tiempo: " << (float)tiempo2/CLOCKS_PER_SEC - (float)tiempo1/CLOCKS_PER_SEC << endl;
     
+    for(int i=0;i<c.size();i++) cout << c[i] << " ";
+    cout << endl;
 
 }
 
@@ -323,13 +412,12 @@ int main(int argc, char* argv[]){
     int k, algoritmo;
     vector<int> seed;
 
-    if (argc >= 5){
+    if (argc == 6){
         ruta += argv[1];
         restricciones += argv[2];
         k = atoi(argv[3]);
         algoritmo = atoi(argv[4]);
-        if(argc > 5) for(int i=0; i<k; i++) seed.push_back(atoi(argv[i+5]));
-        else for(int i=0; i<k; i++) seed.push_back(160*(i+1));
+        for(int i=0; i<k; i++) seed.push_back(atoi(argv[5])*(i+1));
     }else{
         string aux_ruta;
         cout << "\nNo ha especificado el número correcto de argumentos: se le pedirán a continuación" << endl;
