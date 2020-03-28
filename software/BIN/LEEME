@@ -1,0 +1,9 @@
+Descripción sobre los archivos de ejecucion del programa:
+
+ - clustering: es el archivo ejecutable, si aun no lo ves debes ejecutar make en el directorio raiz para compilar el programa. Puedes ejecutarlo directamente asi:
+
+./clustering <dataframe> <restricciones> <k> <{0:COPKM, 1:BL}> <seed>
+
+ - clustering.sh: un script que, al ser llamado, ejecuta todas las ejecuciones correspondientes a cada algoritmo, debiendo estar acompañado del algoritmo a usar copkm/bl.
+
+- data: carpeta donde el programa busca los conjuntos de datos y de restricciones.
