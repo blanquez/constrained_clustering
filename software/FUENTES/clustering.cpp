@@ -1,10 +1,13 @@
 ///////////////////////////////////////////////////////////
-//  PRÁCTICA 1 - TÉCNICAS DE BÚSQUEDA LOCAL Y ALGORITMOS
-//               GREEDY / METAGEURÍSTICAS
-//
-//  Antonio José Blánquez Pérez 3ºCSI UGR
-//  45926869D
-//  Grupo 2 - Jueves
+//  PRÁCTICA 1 - TÉCNICAS DE BÚSQUEDA LOCAL Y ALGORITMOS //
+//               GREEDY                                  //
+//           +                                           //
+//                                                       //
+//  PRÁCTICA 2 - TÉCNICAS BASADAS EN POBLACIONES         //
+//                                                       //
+//  Antonio José Blánquez Pérez 3ºCSI UGR                //
+//  METAHEURÍSTICAS                                      //
+//  Grupo 2 - Jueves                                     //
 ///////////////////////////////////////////////////////////
 
 #include <iostream>
@@ -367,7 +370,7 @@ void busqueda_local(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set
     for(int i=0; i<(*cl_set).size();i++){
         for(int j=i+1; j<(*cl_set).size();j++){
             aux_calc = 0;
-            for(int l=0; l<(*cl_set)[0].size(); l++) aux_calc += pow((*cl_set)[c[i]][l]-(*cl_set)[i][l],2);
+            for(int l=0; l<(*cl_set)[0].size(); l++) aux_calc += pow((*cl_set)[i][l]-(*cl_set)[j][l],2);
             aux_calc = pow(aux_calc, 0.5);
             if(aux_calc > distancia_max) distancia_max = (int)aux_calc + 1;
         }
@@ -376,7 +379,6 @@ void busqueda_local(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set
     //Calculo de f inicial
 
     int rel=6;      // Parámetro de relevancia
-
     float lambda = distancia_max*rel / lista_const.size();
     float desviacion, desv_temporal;
     int infeasibility, infe_temporal;
@@ -451,6 +453,674 @@ void busqueda_local(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set
 
 }
 
+void genetico(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, int k, vector<int> seed, int tipo, int cruce){
+
+    //Crear poblacion inicial aleatoria
+    
+    vector<int> c;
+    vector<vector<int> > poblacion;
+    bool condicion;
+    srand(seed[0]);
+    
+    for(int j=0; j<50; j++){
+        do{
+            c.clear();
+            for(int i=0; i<(*cl_set).size(); i++) c.push_back(rand()%k);
+            condicion = count(c.begin(), c.end(), 0) == 0;
+            for(int i=1; i<k && !condicion; i++) condicion || count(c.begin(), c.end(), i) == 0;
+        }while(condicion);
+        poblacion.push_back(c);
+    }
+
+    //Infeasibility en lista
+
+    vector<vector<int> > lista_const;
+    vector<int> aux_lista;
+    for(int i=0; i<(*cl_set).size();i++){
+        for(int j=i+1; j<(*cl_set).size();j++){
+            if((*cl_set_const)[i][j] == 1){
+                aux_lista.clear();
+                aux_lista.push_back(i);
+                aux_lista.push_back(j);
+                aux_lista.push_back(1);
+                lista_const.push_back(aux_lista);
+            }
+            else if((*cl_set_const)[i][j] == -1){
+                aux_lista.clear();
+                aux_lista.push_back(i);
+                aux_lista.push_back(j);
+                aux_lista.push_back(-1);
+                lista_const.push_back(aux_lista);
+            }
+        }
+    }
+
+    //Calculo de lambda
+
+    float distancia_max = 0, aux_calc;
+    for(int i=0; i<(*cl_set).size();i++){
+        for(int j=i+1; j<(*cl_set).size();j++){
+            aux_calc = 0;
+            for(int l=0; l<(*cl_set)[0].size(); l++) aux_calc += pow((*cl_set)[i][l]-(*cl_set)[j][l],2);
+            aux_calc = pow(aux_calc, 0.5);
+            if(aux_calc > distancia_max) distancia_max = (int)aux_calc + 1;
+        }
+    }
+
+    float lambda = distancia_max / lista_const.size();
+
+    // Bucle principal
+
+    int iteraciones = 0, infeasibility, indice, valor, aux, hijo1, hijo2, padre1, padre2, mutaciones = 0;
+    float valorf, auxf, hijo1f, hijo2f, padre1f, padre2f;
+    float desviacion;
+    vector<int> indices, ind_cruces;
+    vector<vector<int> > padres, hijos;
+
+    time_t tiempo1, tiempo2;
+
+    tiempo1 = clock();
+
+    if(tipo == 0){              // Algoritmo genetico generacional
+        if(cruce == 0){         // AGG - UN
+            while(iteraciones<100000){
+
+                // Eleccion de padres(poblacion.size())
+                
+                padres.clear();
+                for(int i=0;i<poblacion.size();i++){
+                    padre1 = rand()%poblacion.size();
+                    padre2 = rand()%poblacion.size();
+                    if(calcular_f(cl_set,poblacion[padre1],lista_const,k,lambda,&desviacion,&infeasibility) <= calcular_f(cl_set,poblacion[padre2],lista_const,k,lambda,&desviacion,&infeasibility))
+                        padres.push_back(poblacion[padre1]);
+                    else
+                        padres.push_back(poblacion[padre2]);
+                    iteraciones += 2;
+                }
+
+                // Cruces(Operador uniforme)
+
+                hijos.clear();
+                for(int i=1;i<padres.size()*0.7;i+=2){
+                    hijos.push_back(padres[i-1]);
+                    hijos.push_back(padres[i-1]);
+
+                    for(int j=0;j<(padres[0].size()/2);j++){
+                        valor = rand()%padres[0].size();
+                        hijos[i-1][valor] = padres[i][valor];
+                    }
+
+                    for(int j=0;j<(padres[0].size()/2);j++){
+                        valor = rand()%padres[0].size();
+                        hijos[i][valor] = padres[i][valor];
+                    }
+                }
+
+                
+                // Mutacion
+
+                mutaciones += hijos.size()*hijos[0].size();
+                if(mutaciones >= 1000){
+                    mutaciones = mutaciones % 1000;
+                    indice = rand()%hijos.size();
+                    valor = rand()%hijos[0].size();
+                    hijos[indice][valor] = (hijos[indice][valor] + rand()%(k-1) + 1)%k;
+                }
+
+                // Reemplazamiento(con elitismo)
+
+                valorf = calcular_f(cl_set,padres[0],lista_const,k,lambda,&desviacion,&infeasibility);
+                indice = 0;
+                iteraciones++;
+                for(int i=1;i<poblacion.size();i++){
+                    auxf = calcular_f(cl_set,poblacion[i],lista_const,k,lambda,&desviacion,&infeasibility);
+                    iteraciones++;
+                    if(auxf < valorf){
+                        indice = i;
+                        valorf = auxf;
+                    }
+                }
+                c = poblacion[indice];
+                poblacion.clear();
+                poblacion.push_back(c);
+
+                valorf = calcular_f(cl_set,hijos[0],lista_const,k,lambda,&desviacion,&infeasibility);
+                indice = 0;
+                iteraciones++;
+                for(int i=1;i<hijos.size();i++){
+                    auxf = calcular_f(cl_set,hijos[i],lista_const,k,lambda,&desviacion,&infeasibility);
+                    iteraciones++;
+                    if(auxf > valorf){
+                        indice = i;
+                        valorf = auxf;
+                    }
+                }
+                hijos.erase(hijos.begin()+indice, hijos.begin()+indice+1);
+
+                for(int i=0;i<hijos.size();i++) poblacion.push_back(hijos[i]);
+
+                for(int i=padres.size()*0.7-1;i<padres.size();i++) poblacion.push_back(padres[i]);
+            }
+        }else{                  // AGG - SF
+            while(iteraciones<100000){
+                
+                // Eleccion de padres(poblacion.size())
+
+                padres.clear();
+                for(int i=0;i<poblacion.size();i++){
+                    padre1 = rand()%poblacion.size();
+                    padre2 = rand()%poblacion.size();
+                    if(calcular_f(cl_set,poblacion[padre1],lista_const,k,lambda,&desviacion,&infeasibility) <= calcular_f(cl_set,poblacion[padre2],lista_const,k,lambda,&desviacion,&infeasibility))
+                        padres.push_back(poblacion[padre1]);
+                    else
+                        padres.push_back(poblacion[padre2]);
+                    iteraciones += 2;
+                }
+
+                // Cruces(Operador de segmento finito)
+
+                hijos.clear();
+                for(int i=1;i<padres.size()*0.7;i+=2){
+                    hijos.push_back(padres[i]);
+                    hijos.push_back(padres[i]);
+
+                    indice = rand()%padres[0].size();
+                    valor = rand()%padres[0].size();
+
+                    for(int j=indice;j<(indice+valor);j++) hijos[i-1][j%padres[0].size()] = padres[i-1][j%padres[0].size()];
+
+                    indice = rand()%padres[0].size();
+                    valor = rand()%padres[0].size();
+
+                    for(int j=indice;j<(indice+valor);j++) hijos[i][j%padres[0].size()] = padres[i-1][j%padres[0].size()];
+                
+                    ind_cruces.clear();
+                    for(int j=0;j<indice;j++) ind_cruces.push_back(j);
+                    for(int j=indice+valor;j<padres[0].size();j++) ind_cruces.push_back(j);
+
+                    random_shuffle(ind_cruces.begin(),ind_cruces.end());
+                    for(int j=0;j<(ind_cruces.size()/2);j++){
+                        valor = ind_cruces[j];
+                        hijos[i-1][valor] = padres[i-1][valor];
+                    }
+
+                    random_shuffle(ind_cruces.begin(),ind_cruces.end());
+                    for(int j=0;j<(ind_cruces.size()/2);j++){
+                        valor = ind_cruces[j];
+                        hijos[i][valor] = padres[i-1][valor];
+                    }
+                }
+
+                // Mutacion
+
+                mutaciones += hijos.size()*hijos[0].size();
+                if(mutaciones >= 1000){
+                    mutaciones = mutaciones % 1000;
+                    indice = rand()%hijos.size();
+                    valor = rand()%hijos[0].size();
+                    hijos[indice][valor] = (hijos[indice][valor] + rand()%(k-1) + 1)%k;
+                }
+
+                // Reemplazamiento(con elitismo)
+
+                valorf = calcular_f(cl_set,poblacion[0],lista_const,k,lambda,&desviacion,&infeasibility);
+                indice = 0;
+                iteraciones++;
+                for(int i=1;i<padres.size();i++){
+                    auxf = calcular_f(cl_set,poblacion[i],lista_const,k,lambda,&desviacion,&infeasibility);
+                    iteraciones++;
+                    if(auxf < valorf){
+                        indice = i;
+                        valorf = auxf;
+                    }
+                }
+                c = poblacion[indice];
+                poblacion.clear();
+                poblacion.push_back(c);
+
+                valorf = calcular_f(cl_set,hijos[0],lista_const,k,lambda,&desviacion,&infeasibility);
+                indice = 0;
+                iteraciones++;
+                for(int i=1;i<hijos.size();i++){
+                    auxf = calcular_f(cl_set,hijos[i],lista_const,k,lambda,&desviacion,&infeasibility);
+                    iteraciones++;
+                    if(aux > valor){
+                        indice = i;
+                        valorf = auxf;
+                    }
+                }
+                hijos.erase(hijos.begin()+indice, hijos.begin()+indice+1);
+
+                for(int i=0;i<hijos.size();i++) poblacion.push_back(hijos[i]);
+
+                for(int i=padres.size()*0.7-1;i<padres.size();i++) poblacion.push_back(padres[i]);
+
+            }
+        }
+    }else{                      // Algoritmo genetico estacionacionario
+        if(cruce == 0){         // AGE - UN
+           while(iteraciones<100000){
+
+                // Eleccion de padres(Solo dos)
+
+                padres.clear();
+                for(int i=0;i<4;i++){
+                    aux = rand()%poblacion.size();
+                    padres.push_back(poblacion[aux]);
+                    indices.push_back(aux);
+                }
+
+                if(calcular_f(cl_set,padres[0],lista_const,k,lambda,&desviacion,&infeasibility) <= calcular_f(cl_set,padres[1],lista_const,k,lambda,&desviacion,&infeasibility)){
+                    padres.push_back(padres[0]);
+                    indices.push_back(indices[0]);
+                }
+                else{
+                    padres.push_back(padres[1]);
+                    indices.push_back(indices[1]);
+                }
+
+                if(calcular_f(cl_set,padres[2],lista_const,k,lambda,&desviacion,&infeasibility) <= calcular_f(cl_set,padres[3],lista_const,k,lambda,&desviacion,&infeasibility)){
+                    padres.push_back(padres[2]);
+                    indices.push_back(indices[2]);
+                }
+                else{
+                    padres.push_back(padres[3]);
+                    indices.push_back(indices[3]);
+                }
+                iteraciones += 4;
+
+                padres.erase(padres.begin(), padres.begin()+4);
+                indices.erase(indices.begin(), indices.begin()+4);
+
+                // Cruces(Operador uniforme)
+
+                hijos.clear();
+                hijos.push_back(padres[0]);
+                hijos.push_back(padres[0]);
+
+                ind_cruces.clear();
+                for(int i=0;i<padres[0].size();i++) ind_cruces.push_back(i);
+
+                random_shuffle(ind_cruces.begin(),ind_cruces.end());
+                for(int i=0;i<(padres[0].size()/2);i++){
+                    valor = ind_cruces[i];
+                    hijos[0][valor] = padres[1][valor];
+                }
+
+                random_shuffle(ind_cruces.begin(),ind_cruces.end());
+                for(int i=0;i<(padres[0].size()/2);i++){
+                    valor = ind_cruces[i];
+                    hijos[1][valor] = padres[1][valor];
+                }
+
+                // Mutacion
+
+                mutaciones += 2*hijos[0].size();
+                if(mutaciones >= 1000){
+                    mutaciones = mutaciones % 1000;
+                    indice = rand()%hijos.size();
+                    valor = rand()%hijos[0].size();
+                    hijos[indice][valor] = (hijos[indice][valor] + rand()%(k-1) + 1)%k;
+                }
+                
+                // Reemplazamiento
+
+                hijo1f = calcular_f(cl_set,hijos[0],lista_const,k,lambda,&desviacion,&infeasibility);
+                hijo2f = calcular_f(cl_set,hijos[1],lista_const,k,lambda,&desviacion,&infeasibility);
+                padre1f = calcular_f(cl_set,padres[0],lista_const,k,lambda,&desviacion,&infeasibility);
+                padre2f = calcular_f(cl_set,padres[1],lista_const,k,lambda,&desviacion,&infeasibility);
+
+                if((hijo1f < padre1f && hijo2f < padre2f) || (hijo1f < padre2f && hijo2f < padre1f)){
+                    poblacion[indices[0]] = hijos[0];
+                    poblacion[indices[1]] = hijos[1];
+                }else if(hijo1f < padre1f) poblacion[indices[0]] = hijos[0];
+                else if(hijo1f < padre2f) poblacion[indices[1]] = hijos[0];
+                else if(hijo2f < padre1f) poblacion[indices[0]] = hijos[1];
+                else if(hijo2f < padre2f) poblacion[indices[1]] = hijos[1];
+
+                iteraciones += 4;
+
+            }
+        }else{                  // AGE - SF
+            while(iteraciones<100000){
+                
+                // Eleccion de padres(Solo dos)
+
+                padres.clear();
+                for(int i=0;i<4;i++){
+                    aux = rand()%poblacion.size();
+                    padres.push_back(poblacion[aux]);
+                    indices.push_back(aux);
+                }
+
+                if(calcular_f(cl_set,padres[0],lista_const,k,lambda,&desviacion,&infeasibility) <= calcular_f(cl_set,padres[1],lista_const,k,lambda,&desviacion,&infeasibility)){
+                    padres.push_back(padres[0]);
+                    indices.push_back(indices[0]);
+                }
+                else{
+                    padres.push_back(padres[1]);
+                    indices.push_back(indices[1]);
+                }
+
+                if(calcular_f(cl_set,padres[2],lista_const,k,lambda,&desviacion,&infeasibility) <= calcular_f(cl_set,padres[3],lista_const,k,lambda,&desviacion,&infeasibility)){
+                    padres.push_back(padres[2]);
+                    indices.push_back(indices[2]);
+                }
+                else{
+                    padres.push_back(padres[3]);
+                    indices.push_back(indices[3]);
+                }
+                iteraciones += 4;
+
+                padres.erase(padres.begin(), padres.begin()+4);
+                indices.erase(indices.begin(), indices.begin()+4);
+
+                // Cruces(Operador de segmento finito)
+
+                hijos.clear();
+                hijos.push_back(padres[1]);
+                hijos.push_back(padres[1]);
+
+                indice = rand()%padres[0].size();
+                valor = rand()%padres[0].size();
+
+                for(int i=indice;i<(indice+valor);i++) hijos[0][i%padres[0].size()] = padres[0][i%padres[0].size()];
+
+                indice = rand()%padres[0].size();
+                valor = rand()%padres[0].size();
+
+                for(int i=indice;i<(indice+valor);i++) hijos[1][i%padres[0].size()] = padres[0][i%padres[0].size()];
+
+                ind_cruces.clear();
+                    for(int j=0;j<indice;j++) ind_cruces.push_back(j);
+                    for(int j=indice+valor;j<padres[0].size();j++) ind_cruces.push_back(j);
+
+                    random_shuffle(ind_cruces.begin(),ind_cruces.end());
+                    for(int j=0;j<(ind_cruces.size()/2);j++){
+                        valor = ind_cruces[j];
+                        hijos[0][valor] = padres[0][valor];
+                    }
+
+                    random_shuffle(ind_cruces.begin(),ind_cruces.end());
+                    for(int j=0;j<(ind_cruces.size()/2);j++){
+                        valor = ind_cruces[j];
+                        hijos[1][valor] = padres[0][valor];
+                    }
+
+                // Mutacion
+
+                mutaciones += 2*hijos[0].size();
+                if(mutaciones >= 1000){
+                    mutaciones = mutaciones % 1000;
+                    indice = rand()%hijos.size();
+                    valor = rand()%hijos[0].size();
+                    hijos[indice][valor] = (hijos[indice][valor] + rand()%(k-1) + 1)%k;
+                }
+
+                // Reemplazamiento
+
+                hijo1f = calcular_f(cl_set,hijos[0],lista_const,k,lambda,&desviacion,&infeasibility);
+                hijo2f = calcular_f(cl_set,hijos[1],lista_const,k,lambda,&desviacion,&infeasibility);
+                padre1f = calcular_f(cl_set,padres[0],lista_const,k,lambda,&desviacion,&infeasibility);
+                padre2f = calcular_f(cl_set,padres[1],lista_const,k,lambda,&desviacion,&infeasibility);
+
+                if((hijo1f < padre1f && hijo2f < padre2f) || (hijo1f < padre2f && hijo2f < padre1f)){
+                    poblacion[indices[0]] = hijos[0];
+                    poblacion[indices[1]] = hijos[1];
+                }else if(hijo1f < padre1f) poblacion[indices[0]] = hijos[0];
+                else if(hijo1f < padre2f) poblacion[indices[1]] = hijos[0];
+                else if(hijo2f < padre1f) poblacion[indices[0]] = hijos[1];
+                else if(hijo2f < padre2f) poblacion[indices[1]] = hijos[1];
+
+                iteraciones += 4;
+
+            }
+        }
+    }
+
+    tiempo2 = clock();
+
+    // Busqueda de la mejor solucion en la poblacion
+
+    valorf = calcular_f(cl_set,poblacion[0],lista_const,k,lambda,&desviacion,&infeasibility);
+    indice = 0;
+    for(int i=1;i<poblacion.size();i++){
+        auxf = calcular_f(cl_set,poblacion[i],lista_const,k,lambda,&desviacion,&infeasibility);
+        if(auxf < valorf){
+            indice = i;
+            valorf = auxf;
+        }
+    }
+
+    cout << desviacion << " ";
+    cout << infeasibility << " ";
+    cout << valorf << " ";
+    cout << tiempo2 - tiempo1 << endl;
+}
+
+int bl_suave(vector<int>* cromosoma, int k, int max_fallos, vector<vector<float> >* conjunto, vector<vector<int> > lista, float lambda){
+
+    vector<int> indices, vecino;
+    for(int i=0;i<(*cromosoma).size();i++) indices.push_back(i);
+    random_shuffle(indices.begin(),indices.end());
+    int fallos = 0, iters = 0, max_iters=(*cromosoma).size(), eval = 1, nada;
+    float nada2, mejorf = calcular_f(conjunto,(*cromosoma),lista,k,lambda,&nada2,&nada), efe;
+    bool mejora = true;
+
+    while((mejora || fallos < max_fallos) && iters < max_iters){
+        mejora = false;
+
+        for(int i=1;i<k-1;i++){
+            vecino = (*cromosoma);
+            vecino[indices[iters]] = (vecino[indices[iters]] + i)%k;
+            efe = calcular_f(conjunto,vecino,lista,k,lambda,&nada2,&nada);
+            eval++;
+            if(efe<mejorf){
+                mejorf = efe;
+                (*cromosoma) = vecino;
+                mejora=true;
+            }
+        }
+
+        if(!mejora) fallos++;
+
+        iters++;
+    }
+
+    return eval;
+}
+
+void memetico(vector<vector<float> >* cl_set, vector<vector<int> >* cl_set_const, int k, vector<int> seed, int ratio, bool mejor){
+    
+    //Crear poblacion inicial aleatoria
+    
+    vector<int> c;
+    vector<vector<int> > poblacion;
+    bool condicion;
+    srand(seed[0]);
+    
+    for(int j=0; j<10; j++){
+        do{
+            c.clear();
+            for(int i=0; i<(*cl_set).size(); i++) c.push_back(rand()%k);
+            condicion = count(c.begin(), c.end(), 0) == 0;
+            for(int i=1; i<k && !condicion; i++) condicion || count(c.begin(), c.end(), i) == 0;
+        }while(condicion);
+        poblacion.push_back(c);
+    }
+
+    //Infeasibility en lista
+
+    vector<vector<int> > lista_const;
+    vector<int> aux_lista;
+    for(int i=0; i<(*cl_set).size();i++){
+        for(int j=i+1; j<(*cl_set).size();j++){
+            if((*cl_set_const)[i][j] == 1){
+                aux_lista.clear();
+                aux_lista.push_back(i);
+                aux_lista.push_back(j);
+                aux_lista.push_back(1);
+                lista_const.push_back(aux_lista);
+            }
+            else if((*cl_set_const)[i][j] == -1){
+                aux_lista.clear();
+                aux_lista.push_back(i);
+                aux_lista.push_back(j);
+                aux_lista.push_back(-1);
+                lista_const.push_back(aux_lista);
+            }
+        }
+    }
+
+    //Calculo de lambda
+
+    float distancia_max = 0, aux_calc;
+    for(int i=0; i<(*cl_set).size();i++){
+        for(int j=i+1; j<(*cl_set).size();j++){
+            aux_calc = 0;
+            for(int l=0; l<(*cl_set)[0].size(); l++) aux_calc += pow((*cl_set)[i][l]-(*cl_set)[j][l],2);
+            aux_calc = pow(aux_calc, 0.5);
+            if(aux_calc > distancia_max) distancia_max = (int)aux_calc + 1;
+        }
+    }
+
+    float lambda = distancia_max / lista_const.size();
+
+    // Bucle principal
+
+    int iteraciones = 0, infeasibility, indice, valor, aux, hijo1, hijo2, padre1, padre2, mutaciones = 0;
+    float valorf, auxf, hijo1f, hijo2f, padre1f, padre2f;
+    float desviacion;
+    vector<int> indices, ind_cruces;
+    vector<vector<int> > padres, hijos;
+
+    time_t tiempo1, tiempo2;
+
+    tiempo1 = clock();
+    
+    while(iteraciones<100000){
+
+        // Eleccion de padres(poblacion.size())
+                
+        padres.clear();
+        for(int i=0;i<poblacion.size();i++){
+            padre1 = rand()%poblacion.size();
+            padre2 = rand()%poblacion.size();
+            if(calcular_f(cl_set,poblacion[padre1],lista_const,k,lambda,&desviacion,&infeasibility) <= calcular_f(cl_set,poblacion[padre2],lista_const,k,lambda,&desviacion,&infeasibility))
+                padres.push_back(poblacion[padre1]);
+            else
+                padres.push_back(poblacion[padre2]);
+            iteraciones += 2;
+        }
+
+        // Cruces(Operador uniforme)
+
+        hijos.clear();
+        for(int i=1;i<padres.size()*0.7;i+=2){
+            hijos.push_back(padres[i-1]);
+            hijos.push_back(padres[i-1]);
+
+            for(int j=0;j<(padres[0].size()/2);j++){
+                valor = rand()%padres[0].size();
+                hijos[i-1][valor] = padres[i][valor];
+            }
+
+            for(int j=0;j<(padres[0].size()/2);j++){
+                valor = rand()%padres[0].size();
+                hijos[i][valor] = padres[i][valor];
+            }
+        }
+
+                
+        // Mutacion
+
+        mutaciones += hijos.size()*hijos[0].size();
+        if(mutaciones >= 1000){
+            mutaciones = mutaciones % 1000;
+            indice = rand()%hijos.size();
+            valor = rand()%hijos[0].size();
+            hijos[indice][valor] = (hijos[indice][valor] + rand()%(k-1) + 1)%k;
+        }
+
+        // Reemplazamiento(con elitismo)
+
+        valorf = calcular_f(cl_set,padres[0],lista_const,k,lambda,&desviacion,&infeasibility);
+        indice = 0;
+        iteraciones++;
+        for(int i=1;i<poblacion.size();i++){
+            auxf = calcular_f(cl_set,poblacion[i],lista_const,k,lambda,&desviacion,&infeasibility);
+            iteraciones++;
+            if(auxf < valorf){
+                indice = i;
+                valorf = auxf;
+            }
+        }
+        c = poblacion[indice];
+        poblacion.clear();
+        poblacion.push_back(c);
+
+        valorf = calcular_f(cl_set,hijos[0],lista_const,k,lambda,&desviacion,&infeasibility);
+        indice = 0;
+        iteraciones++;
+        for(int i=1;i<hijos.size();i++){
+            auxf = calcular_f(cl_set,hijos[i],lista_const,k,lambda,&desviacion,&infeasibility);
+            iteraciones++;
+            if(auxf > valorf){
+                indice = i;
+                valorf = auxf;
+            }
+        }
+        hijos.erase(hijos.begin()+indice, hijos.begin()+indice+1);
+
+        for(int i=0;i<hijos.size();i++) poblacion.push_back(hijos[i]);
+
+        for(int i=padres.size()*0.7-1;i<padres.size();i++) poblacion.push_back(padres[i]);
+
+        // BLS
+
+        if(mejor){
+            valorf = calcular_f(cl_set,poblacion[0],lista_const,k,lambda,&desviacion,&infeasibility);
+            indice = 0;
+            iteraciones++;
+            for(int i=1;i<poblacion.size();i++){
+                auxf = calcular_f(cl_set,poblacion[i],lista_const,k,lambda,&desviacion,&infeasibility);
+                iteraciones++;
+                if(auxf < valorf){
+                    indice = i;
+                    valorf = auxf;
+                }
+            }
+
+            iteraciones += bl_suave(&poblacion[indice],k,(int)(poblacion[0].size()*0.1),cl_set,lista_const,lambda);
+        }else{
+            indices.clear();
+            for(int i=0;i<poblacion.size();i++) indices.push_back(i);
+            random_shuffle(indices.begin(),indices.end());
+
+            for(int i=0;i<poblacion.size()*ratio;i++) iteraciones += bl_suave(&poblacion[indices[i]],k,(int)(poblacion[0].size()*0.1),cl_set,lista_const,lambda);
+        }
+    }
+
+    tiempo2 = clock();
+
+    // Busqueda de la mejor solucion en la poblacion
+
+    valorf = calcular_f(cl_set,poblacion[0],lista_const,k,lambda,&desviacion,&infeasibility);
+    indice = 0;
+    for(int i=1;i<poblacion.size();i++){
+        auxf = calcular_f(cl_set,poblacion[i],lista_const,k,lambda,&desviacion,&infeasibility);
+        if(auxf < valorf){
+            indice = i;
+            valorf = auxf;
+        }
+    }
+
+    cout << desviacion << " ";
+    cout << infeasibility << " ";
+    cout << valorf << " ";
+    cout << tiempo2 - tiempo1 << endl;
+}
+
 int main(int argc, char* argv[]){
 
     //Lectura de datos de referencias por argumento o por teclado
@@ -474,7 +1144,7 @@ int main(int argc, char* argv[]){
         cout << "Introduzca el nombre del archivo que contiene el dataframe: ";
         cin >> aux_ruta;
         restricciones += aux_ruta;
-        cout << "Introduzca el algoritmo deseado(0:Greedy COPKM, 1:Búsqueda local): ";
+        cout << "Introduzca el algoritmo deseado: ";
         cin >> algoritmo;
         cout << "Introduzca el número de clusters que se crearán: ";
         cin >> k;
@@ -489,7 +1159,7 @@ int main(int argc, char* argv[]){
         return 0;
     }
 
-    cout << "Cargando datos..." << endl;
+    //cout << "Cargando datos..." << endl;
 
     //Calculo de dimensiones
 
@@ -556,7 +1226,14 @@ int main(int argc, char* argv[]){
     //Seleccion de algoritmo
 
     if(algoritmo==0) copkm(&cl_set, &cl_set_const, k, seed);
-    else busqueda_local(&cl_set, &cl_set_const, k, seed);
+    else if(algoritmo==1) busqueda_local(&cl_set, &cl_set_const, k, seed);
+    else if(algoritmo==2) genetico(&cl_set, &cl_set_const, k, seed, 0, 0);
+    else if(algoritmo==3) genetico(&cl_set, &cl_set_const, k, seed, 0, 1);
+    else if(algoritmo==4) genetico(&cl_set, &cl_set_const, k, seed, 1, 0);
+    else if(algoritmo==5) genetico(&cl_set, &cl_set_const, k, seed, 1, 1);
+    else if(algoritmo==6) memetico(&cl_set, &cl_set_const, k, seed, 1, false);
+    else if(algoritmo==7) memetico(&cl_set, &cl_set_const, k, seed, 0.1, false);
+    else if(algoritmo==8) memetico(&cl_set, &cl_set_const, k, seed, 0.1, true);
 
     return 0;
 }
