@@ -23,43 +23,46 @@
 #include <time.h>
 using namespace std;
 
-float calcular_f(vector<vector<float>> *cl_set, vector<int> c, vector<vector<int>> lista_const, int k, float lambda, float *desviacion, int *infeas)
-{
+struct restriccion{
+   int a;
+   int b;
+   int r;
+};
 
-    //Control de clusters vacíos
-
-    bool condicion_vacio = true;
-
-    for (int i = 0; i < k; i++)
-    {
-        if (count(c.begin(), c.end(), i) < 1)
-        {
-            condicion_vacio = false;
-            break;
+vector<restriccion> calcular_list_const(vector<vector<int> >* cl_set_const){
+    vector<restriccion> lista_const;
+    restriccion r;
+    for(int i = 0; i<(*cl_set_const).size();++i){
+        for(int j = i; j<(*cl_set_const)[i].size(); ++j){
+            if((*cl_set_const)[i][j] == 1 || (*cl_set_const)[i][j] == -1){
+                r.a = i;   
+                r.b = j;
+                r.r = (*cl_set_const)[i][j];
+                lista_const.push_back(r);
+            }
         }
     }
 
-    //Calculo de infesibility
+    return lista_const;
+}
 
+int calcular_infeas(vector<int> sol, vector<restriccion> lista_const){
     int infeasibility = 0;
 
-    if (condicion_vacio)
-    {
-        for (int i = 0; i < lista_const.size(); i++)
-        {
-            if (c[lista_const[i][0]] == c[lista_const[i][1]] && lista_const[i][2] == -1)
-                infeasibility++;
-            if (c[lista_const[i][0]] != c[lista_const[i][1]] && lista_const[i][2] == 1)
-                infeasibility++;
+    for(int i = 0; i<lista_const.size(); ++i){
+        if(lista_const[i].r == 1){ 
+            if(sol[lista_const[i].a] != sol[lista_const[i].b])
+                ++infeasibility;
+        }else{ 
+            if(sol[lista_const[i].a] == sol[lista_const[i].b])
+                ++infeasibility;
         }
     }
-    else
-    {
-        infeasibility = 9999;
-    }
 
-    (*infeas) = infeasibility;
+    return infeasibility;
+}
 
+float calcular_desv(vector<vector<float>> *cl_set, vector<int> c, int k){
     //Calculo de centroides
 
     vector<vector<float>> centroides;
@@ -106,7 +109,53 @@ float calcular_f(vector<vector<float>> *cl_set, vector<int> c, vector<vector<int
     for (int i = 0; i < k; i++)
         desv_general += dist_intracl[i];
 
-    desv_general /= k;
+    return desv_general /= k;
+}
+
+float calcular_lambda(vector<vector<float>> *cl_set, int num_const){
+    float distancia_max = 0, aux_calc;
+        
+    for(int i = 0; i<(*cl_set).size(); ++i){
+        for(int j = i+1; j<(*cl_set).size(); ++j){
+            aux_calc = 0;
+            for(int k = 0; j<(*cl_set)[i].size(); ++j){
+                aux_calc += pow((*cl_set)[i][k] - (*cl_set)[j][k], 2);
+            }
+            aux_calc = pow(aux_calc, 0.5);
+            if(aux_calc > distancia_max)
+            distancia_max = ceil(aux_calc);
+        }
+    }
+    distancia_max /= num_const;
+
+    return distancia_max;
+}
+
+float calcular_f(vector<vector<float>>* cl_set, vector<int> c, vector<restriccion> lista_const, int k, float lambda, float* desviacion, int* infeas)
+{
+    //Control de clusters vacíos
+
+    bool condicion_vacio = true;
+
+    for (int i = 0; i < k; i++)
+    {
+        if (count(c.begin(), c.end(), i) < 1)
+        {
+            condicion_vacio = false;
+            break;
+        }
+    }
+
+    //Calculo de infesibility
+
+    int infeasibility;
+
+    if (condicion_vacio) infeasibility = calcular_infeas(c,lista_const);
+    else infeasibility = 9999;
+
+    (*infeas) = infeasibility;
+
+    float desv_general = calcular_desv(cl_set,c,k);
 
     (*desviacion) = desv_general;
 
@@ -118,34 +167,11 @@ void copkm(vector<vector<float>> *cl_set, vector<vector<int>> *cl_set_const, int
 
     clock_t tiempo1, tiempo2;
 
+    tiempo1 = clock();
+
     //Infeasibility en lista
 
-    vector<vector<int>> lista_const;
-    vector<int> aux_lista;
-    for (int i = 0; i < (*cl_set).size(); i++)
-    {
-        for (int j = i + 1; j < (*cl_set).size(); j++)
-        {
-            if ((*cl_set_const)[i][j] == 1)
-            {
-                aux_lista.clear();
-                aux_lista.push_back(i);
-                aux_lista.push_back(j);
-                aux_lista.push_back(1);
-                lista_const.push_back(aux_lista);
-            }
-            else if ((*cl_set_const)[i][j] == -1)
-            {
-                aux_lista.clear();
-                aux_lista.push_back(i);
-                aux_lista.push_back(j);
-                aux_lista.push_back(-1);
-                lista_const.push_back(aux_lista);
-            }
-        }
-    }
-
-    tiempo1 = clock();
+    vector<restriccion> lista_const = calcular_list_const(cl_set_const);
 
     // Aleatorizacion de acceso a las soluciones
 
@@ -156,8 +182,6 @@ void copkm(vector<vector<float>> *cl_set, vector<vector<int>> *cl_set_const, int
     random_shuffle(indices.begin(), indices.end());
 
     // Creacion de centroides aleatorios
-
-    cout << "Creando centroides iniciales..." << endl;
 
     vector<float> minimo;
     vector<float> maximo;
@@ -191,14 +215,12 @@ void copkm(vector<vector<float>> *cl_set, vector<vector<int>> *cl_set_const, int
 
     // Aplicamos el algoritmo
 
-    cout << "Aplicando algoritmo Greedy COPKM..." << endl;
-
     vector<int> c_old;                        // Solucion anterior
     vector<int> aux_baraja;                   // Vector auxiliar para reordenar solucion
     vector<int> c;                            // Solucion actual
     vector<int> inf_actual;                   // Infeasibility
     float minimo_cl, aux_calc, distancia = 0; // Variables auxiliares para la eleccion de cluster
-    int minimo_ind;                           // Indice de la minima infeasibility
+    int minimo_ind, contador_salida=0;                           // Indice de la minima infeasibility
 
     do
     {
@@ -261,9 +283,9 @@ void copkm(vector<vector<float>> *cl_set, vector<vector<int>> *cl_set_const, int
                     c[i2] = j;
                     for (int l = 0; l < lista_const.size(); l++)
                     {
-                        if (c[lista_const[l][0]] == c[lista_const[l][1]] && lista_const[l][2] == -1)
+                        if (c[lista_const[l].a] == c[lista_const[l].b] && lista_const[l].r == -1)
                             inf_actual[j]++;
-                        if (c[lista_const[l][0]] != c[lista_const[l][1]] && lista_const[l][2] == 1)
+                        if (c[lista_const[l].a] != c[lista_const[l].b] && lista_const[l].r == 1)
                             inf_actual[j]++;
                     }
                 }
@@ -347,30 +369,14 @@ void copkm(vector<vector<float>> *cl_set, vector<vector<int>> *cl_set_const, int
             for (int j = 0; j < centroides[0].size(); j++)
                 centroides[i][j] /= contador[i];
 
-        float desviacion;
-        int infeasibility;
-
-    } while (c != c_old);
+        contador_salida++;
+    } while (c != c_old && contador_salida < 1000);
 
     tiempo2 = clock();
 
     // Calculo de lambda
 
-    float distancia_max = 0;
-    for (int i = 0; i < (*cl_set).size(); i++)
-    {
-        for (int j = i + 1; j < (*cl_set).size(); j++)
-        {
-            aux_calc = 0;
-            for (int l = 0; l < (*cl_set)[0].size(); l++)
-                aux_calc += pow((*cl_set)[c[i]][l] - (*cl_set)[i][l], 2);
-            aux_calc = pow(aux_calc, 0.5);
-            if (aux_calc > distancia_max)
-                distancia_max = (int)aux_calc + 1;
-        }
-    }
-
-    float lambda = distancia_max / lista_const.size();
+    float lambda = calcular_lambda(cl_set, lista_const.size());
 
     // Calculo de la funcion objetivo
 
@@ -379,10 +385,11 @@ void copkm(vector<vector<float>> *cl_set, vector<vector<int>> *cl_set_const, int
 
     float f = calcular_f(cl_set, c, lista_const, k, lambda, &desviacion, &infeasibility);
 
-    cout << "f: " << f << endl;
-    cout << "C/: " << desviacion << endl;
-    cout << "inf: " << infeasibility << endl;
-    cout << "tiempo: " << (float)tiempo2 / CLOCKS_PER_SEC - (float)tiempo1 / CLOCKS_PER_SEC << endl;
+    if(contador_salida >= 1000) cout << "X ";
+    cout << desviacion << " ";
+    cout << infeasibility << " ";
+    cout << f << " ";
+    cout << (float)tiempo2 / CLOCKS_PER_SEC - (float)tiempo1 / CLOCKS_PER_SEC << endl;
 }
 
 void busqueda_local(vector<vector<float>> *cl_set, vector<vector<int>> *cl_set_const, int k, vector<int> seed)
@@ -411,58 +418,17 @@ void busqueda_local(vector<vector<float>> *cl_set, vector<vector<int>> *cl_set_c
 
     //Infeasibility en lista
 
-    vector<vector<int>> lista_const;
-    vector<int> aux_lista;
-    for (int i = 0; i < (*cl_set).size(); i++)
-    {
-        for (int j = i + 1; j < (*cl_set).size(); j++)
-        {
-            if ((*cl_set_const)[i][j] == 1)
-            {
-                aux_lista.clear();
-                aux_lista.push_back(i);
-                aux_lista.push_back(j);
-                aux_lista.push_back(1);
-                lista_const.push_back(aux_lista);
-            }
-            else if ((*cl_set_const)[i][j] == -1)
-            {
-                aux_lista.clear();
-                aux_lista.push_back(i);
-                aux_lista.push_back(j);
-                aux_lista.push_back(-1);
-                lista_const.push_back(aux_lista);
-            }
-        }
-    }
-
-    //Calculo de lambda
-
-    float distancia_max = 0, aux_calc;
-    for (int i = 0; i < (*cl_set).size(); i++)
-    {
-        for (int j = i + 1; j < (*cl_set).size(); j++)
-        {
-            aux_calc = 0;
-            for (int l = 0; l < (*cl_set)[0].size(); l++)
-                aux_calc += pow((*cl_set)[i][l] - (*cl_set)[j][l], 2);
-            aux_calc = pow(aux_calc, 0.5);
-            if (aux_calc > distancia_max)
-                distancia_max = (int)aux_calc + 1;
-        }
-    }
+    vector<restriccion> lista_const = calcular_list_const(cl_set_const);
 
     //Calculo de f inicial
 
-    float lambda = distancia_max / lista_const.size();
+    float lambda = calcular_lambda(cl_set, lista_const.size());
     float desviacion, desv_temporal;
     int infeasibility, infe_temporal;
 
     float f_ini = calcular_f(cl_set, c, lista_const, k, lambda, &desviacion, &infeasibility);
 
     //Busqueda del primer mejor vecino, hasta que no se encuentre ninguno mejor
-
-    cout << "Aplicando algoritmo de busqueda local..." << endl;
 
     float f_act = f_ini;
     int aux_func, contador = 1;
@@ -526,10 +492,10 @@ void busqueda_local(vector<vector<float>> *cl_set, vector<vector<int>> *cl_set_c
 
     tiempo2 = clock();
 
-    cout << "f final: " << f_ini << endl;
-    cout << "c/: " << desviacion << endl;
-    cout << "infeasibility: " << infeasibility << endl;
-    cout << "tiempo: " << (float)tiempo2 / CLOCKS_PER_SEC - (float)tiempo1 / CLOCKS_PER_SEC << endl;
+    cout << desviacion << " ";
+    cout << infeasibility << " ";
+    cout << f_ini << " ";
+    cout << (float)tiempo2 / CLOCKS_PER_SEC - (float)tiempo1 / CLOCKS_PER_SEC << endl;
 }
 
 void genetico(vector<vector<float>> *cl_set, vector<vector<int>> *cl_set_const, int k, vector<int> seed, int tipo, int cruce)
@@ -558,48 +524,11 @@ void genetico(vector<vector<float>> *cl_set, vector<vector<int>> *cl_set_const, 
 
     //Infeasibility en lista
 
-    vector<vector<int>> lista_const;
-    vector<int> aux_lista;
-    for (int i = 0; i < (*cl_set).size(); i++)
-    {
-        for (int j = i + 1; j < (*cl_set).size(); j++)
-        {
-            if ((*cl_set_const)[i][j] == 1)
-            {
-                aux_lista.clear();
-                aux_lista.push_back(i);
-                aux_lista.push_back(j);
-                aux_lista.push_back(1);
-                lista_const.push_back(aux_lista);
-            }
-            else if ((*cl_set_const)[i][j] == -1)
-            {
-                aux_lista.clear();
-                aux_lista.push_back(i);
-                aux_lista.push_back(j);
-                aux_lista.push_back(-1);
-                lista_const.push_back(aux_lista);
-            }
-        }
-    }
+    vector<restriccion> lista_const = calcular_list_const(cl_set_const);
 
     //Calculo de lambda
 
-    float distancia_max = 0, aux_calc;
-    for (int i = 0; i < (*cl_set).size(); i++)
-    {
-        for (int j = i + 1; j < (*cl_set).size(); j++)
-        {
-            aux_calc = 0;
-            for (int l = 0; l < (*cl_set)[0].size(); l++)
-                aux_calc += pow((*cl_set)[i][l] - (*cl_set)[j][l], 2);
-            aux_calc = pow(aux_calc, 0.5);
-            if (aux_calc > distancia_max)
-                distancia_max = (int)aux_calc + 1;
-        }
-    }
-
-    float lambda = distancia_max / lista_const.size();
+    float lambda = calcular_lambda(cl_set, lista_const.size());
 
     // Bucle principal
 
@@ -1057,10 +986,10 @@ void genetico(vector<vector<float>> *cl_set, vector<vector<int>> *cl_set_const, 
     cout << desviacion << " ";
     cout << infeasibility << " ";
     cout << valorf << " ";
-    cout << tiempo2 - tiempo1 << endl;
+    cout << (float)tiempo2 / CLOCKS_PER_SEC - (float)tiempo1 / CLOCKS_PER_SEC << endl;
 }
 
-int bl_suave(vector<int> *cromosoma, int k, int max_fallos, vector<vector<float>> *conjunto, vector<vector<int>> lista, float lambda)
+int bl_suave(vector<int> *cromosoma, int k, int max_fallos, vector<vector<float>> *conjunto, vector<restriccion> lista, float lambda)
 {
 
     vector<int> indices, vecino;
@@ -1124,48 +1053,11 @@ void memetico(vector<vector<float>> *cl_set, vector<vector<int>> *cl_set_const, 
 
     //Infeasibility en lista
 
-    vector<vector<int>> lista_const;
-    vector<int> aux_lista;
-    for (int i = 0; i < (*cl_set).size(); i++)
-    {
-        for (int j = i + 1; j < (*cl_set).size(); j++)
-        {
-            if ((*cl_set_const)[i][j] == 1)
-            {
-                aux_lista.clear();
-                aux_lista.push_back(i);
-                aux_lista.push_back(j);
-                aux_lista.push_back(1);
-                lista_const.push_back(aux_lista);
-            }
-            else if ((*cl_set_const)[i][j] == -1)
-            {
-                aux_lista.clear();
-                aux_lista.push_back(i);
-                aux_lista.push_back(j);
-                aux_lista.push_back(-1);
-                lista_const.push_back(aux_lista);
-            }
-        }
-    }
+    vector<restriccion> lista_const = calcular_list_const(cl_set_const);
 
     //Calculo de lambda
 
-    float distancia_max = 0, aux_calc;
-    for (int i = 0; i < (*cl_set).size(); i++)
-    {
-        for (int j = i + 1; j < (*cl_set).size(); j++)
-        {
-            aux_calc = 0;
-            for (int l = 0; l < (*cl_set)[0].size(); l++)
-                aux_calc += pow((*cl_set)[i][l] - (*cl_set)[j][l], 2);
-            aux_calc = pow(aux_calc, 0.5);
-            if (aux_calc > distancia_max)
-                distancia_max = (int)aux_calc + 1;
-        }
-    }
-
-    float lambda = distancia_max / lista_const.size();
+    float lambda = calcular_lambda(cl_set, lista_const.size());
 
     // Bucle principal
 
@@ -1319,13 +1211,23 @@ void memetico(vector<vector<float>> *cl_set, vector<vector<int>> *cl_set_const, 
     cout << desviacion << " ";
     cout << infeasibility << " ";
     cout << valorf << " ";
-    cout << tiempo2 - tiempo1 << endl;
+    cout << (float)tiempo2 / CLOCKS_PER_SEC - (float)tiempo1 / CLOCKS_PER_SEC << endl;
 }
 
-float cooling_scheme_cauchy(float T_k, float T_ini, float T_fin, int tam){
+float cauchy_cooling_scheme(float T_k, float T_ini, float T_fin, int tam){
     float M = 100000 / tam;
     float beta = (T_ini - T_fin) / (T_ini * T_fin * M);
-    return (T_k / 1 + beta*T_k);
+    return (T_k / (1 + beta*T_k));
+}
+
+float proportional_cooling_scheme(float T_k, float alpha){
+    return T_k*alpha;
+}
+
+double fRand(double fMin, double fMax)
+{
+    double f = (double)rand() / RAND_MAX;
+    return fMin + f * (fMax - fMin);
 }
 
 void enfriamiento_simulado(vector<vector<float>> *cl_set, vector<vector<int>> *cl_set_const, int k, vector<int> seed)
@@ -1337,46 +1239,7 @@ void enfriamiento_simulado(vector<vector<float>> *cl_set, vector<vector<int>> *c
 
     //Infeasibility en lista
 
-    vector<vector<int>> lista_const;
-    vector<int> aux_lista;
-    for (int i = 0; i < (*cl_set).size(); i++)
-    {
-        for (int j = i + 1; j < (*cl_set).size(); j++)
-        {
-            if ((*cl_set_const)[i][j] == 1)
-            {
-                aux_lista.clear();
-                aux_lista.push_back(i);
-                aux_lista.push_back(j);
-                aux_lista.push_back(1);
-                lista_const.push_back(aux_lista);
-            }
-            else if ((*cl_set_const)[i][j] == -1)
-            {
-                aux_lista.clear();
-                aux_lista.push_back(i);
-                aux_lista.push_back(j);
-                aux_lista.push_back(-1);
-                lista_const.push_back(aux_lista);
-            }
-        }
-    }
-
-    //Calculo de lambda
-
-    float distancia_max = 0, aux_calc;
-    for (int i = 0; i < (*cl_set).size(); i++)
-    {
-        for (int j = i + 1; j < (*cl_set).size(); j++)
-        {
-            aux_calc = 0;
-            for (int l = 0; l < (*cl_set)[0].size(); l++)
-                aux_calc += pow((*cl_set)[i][l] - (*cl_set)[j][l], 2);
-            aux_calc = pow(aux_calc, 0.5);
-            if (aux_calc > distancia_max)
-                distancia_max = (int)aux_calc + 1;
-        }
-    }
+    vector<restriccion> lista_const = calcular_list_const(cl_set_const);
 
     //Crear solución aleatoria
 
@@ -1393,19 +1256,19 @@ void enfriamiento_simulado(vector<vector<float>> *cl_set, vector<vector<int>> *c
             condicion || count(s.begin(), s.end(), i) == 0;
     } while (condicion);
 
-    float lambda = distancia_max / lista_const.size();
+    float lambda = calcular_lambda(cl_set, lista_const.size());
     float desviacion, desv_temporal, f_act, delta_f, mejordesv, mejorf;
     int infeasibility, infe_temporal, mejorinf, indice;
     float f_ini = calcular_f(cl_set, s, lista_const, k, lambda, &desviacion, &infeasibility);
     mejorsol = s;
     mejorf = f_ini;
 
-    float T_i = 0.3*f_ini/log(0.3);
+    float T_i = 0.3*f_ini/-log(0.3);
     float T=T_i;
     float T_f=0.001;
     while(T_f>=T_i) T_f = T_f/10;
-    int max_vecinos = 10*s.size(), eval = 1;
-    int cont_ex, max_ex = 0.1*max_vecinos;
+    float max_vecinos = 8*s.size(), eval = 1;
+    float cont_ex, max_ex = 0.1*max_vecinos;
 
     do
     {
@@ -1423,11 +1286,14 @@ void enfriamiento_simulado(vector<vector<float>> *cl_set, vector<vector<int>> *c
             f_act = calcular_f(cl_set, sp, lista_const, k, lambda, &desviacion, &infeasibility);
             eval++;
             delta_f = f_act - f_ini;
+            //cout << delta_f << endl;
 
             // Comparación
 
-            if(delta_f < 0 || (rand()%10000)/10000 <= exp(-delta_f/T)){
+            if(delta_f < 0 || fRand(0,1) <= exp((-delta_f)/T)){
+                //cout << mejorf;
                 s = sp;
+                f_ini = f_act;
                 if(f_act < mejorf){
                     mejorsol = s;
                     mejorf = f_act;
@@ -1435,15 +1301,19 @@ void enfriamiento_simulado(vector<vector<float>> *cl_set, vector<vector<int>> *c
                     mejorinf = infeasibility;
                 }
                 cont_ex++;
+                //cout << " " << mejorf << endl;
             }
             if(cont_ex > max_ex) break;
         }
+        //cout << f_ini << endl;
         // Enfriar
-        T = cooling_scheme_cauchy(T,T_i,T_f,max_vecinos);
-    } while (eval < 100000 && cont_ex > 0);
+        T = cauchy_cooling_scheme(T,T_i,T_f,max_vecinos);
+        //T = proportional_cooling_scheme(T,0.9);
+        
+        //cout << T << endl;
+    } while (eval < 100000 && cont_ex > 0 && T>=T_f);
 
     tiempo2 = clock();
-
     cout << mejordesv << " ";
     cout << mejorinf << " ";
     cout << mejorf << " ";
@@ -1459,46 +1329,7 @@ void bmb(vector<vector<float>> *cl_set, vector<vector<int>> *cl_set_const, int k
 
     //Infeasibility en lista
 
-    vector<vector<int>> lista_const;
-    vector<int> aux_lista;
-    for (int i = 0; i < (*cl_set).size(); i++)
-    {
-        for (int j = i + 1; j < (*cl_set).size(); j++)
-        {
-            if ((*cl_set_const)[i][j] == 1)
-            {
-                aux_lista.clear();
-                aux_lista.push_back(i);
-                aux_lista.push_back(j);
-                aux_lista.push_back(1);
-                lista_const.push_back(aux_lista);
-            }
-            else if ((*cl_set_const)[i][j] == -1)
-            {
-                aux_lista.clear();
-                aux_lista.push_back(i);
-                aux_lista.push_back(j);
-                aux_lista.push_back(-1);
-                lista_const.push_back(aux_lista);
-            }
-        }
-    }
-
-    //Calculo de lambda
-
-    float distancia_max = 0, aux_calc;
-    for (int i = 0; i < (*cl_set).size(); i++)
-    {
-        for (int j = i + 1; j < (*cl_set).size(); j++)
-        {
-            aux_calc = 0;
-            for (int l = 0; l < (*cl_set)[0].size(); l++)
-                aux_calc += pow((*cl_set)[i][l] - (*cl_set)[j][l], 2);
-            aux_calc = pow(aux_calc, 0.5);
-            if (aux_calc > distancia_max)
-                distancia_max = (int)aux_calc + 1;
-        }
-    }
+    vector<restriccion> lista_const = calcular_list_const(cl_set_const);
 
     //Crear solución aleatoria
 
@@ -1522,7 +1353,7 @@ void bmb(vector<vector<float>> *cl_set, vector<vector<int>> *cl_set_const, int k
     }
 
     mejorsol = c;
-    float lambda = distancia_max / lista_const.size();
+    float lambda = calcular_lambda(cl_set, lista_const.size());
     float desviacion, desv_temporal, f_act, f_ini, mejordesv;
     int infeasibility, infe_temporal, mejorinf;
     float mejorf = calcular_f(cl_set, soluciones[0], lista_const, k, lambda, &desviacion, &infeasibility);
@@ -1602,46 +1433,7 @@ void ils(vector<vector<float>> *cl_set, vector<vector<int>> *cl_set_const, int k
 
     //Infeasibility en lista
 
-    vector<vector<int>> lista_const;
-    vector<int> aux_lista;
-    for (int i = 0; i < (*cl_set).size(); i++)
-    {
-        for (int j = i + 1; j < (*cl_set).size(); j++)
-        {
-            if ((*cl_set_const)[i][j] == 1)
-            {
-                aux_lista.clear();
-                aux_lista.push_back(i);
-                aux_lista.push_back(j);
-                aux_lista.push_back(1);
-                lista_const.push_back(aux_lista);
-            }
-            else if ((*cl_set_const)[i][j] == -1)
-            {
-                aux_lista.clear();
-                aux_lista.push_back(i);
-                aux_lista.push_back(j);
-                aux_lista.push_back(-1);
-                lista_const.push_back(aux_lista);
-            }
-        }
-    }
-
-    //Calculo de lambda
-
-    float distancia_max = 0, aux_calc;
-    for (int i = 0; i < (*cl_set).size(); i++)
-    {
-        for (int j = i + 1; j < (*cl_set).size(); j++)
-        {
-            aux_calc = 0;
-            for (int l = 0; l < (*cl_set)[0].size(); l++)
-                aux_calc += pow((*cl_set)[i][l] - (*cl_set)[j][l], 2);
-            aux_calc = pow(aux_calc, 0.5);
-            if (aux_calc > distancia_max)
-                distancia_max = (int)aux_calc + 1;
-        }
-    }
+    vector<restriccion> lista_const = calcular_list_const(cl_set_const);
 
     //Crear solución aleatoria
 
@@ -1658,7 +1450,7 @@ void ils(vector<vector<float>> *cl_set, vector<vector<int>> *cl_set_const, int k
             condicion || count(s.begin(), s.end(), i) == 0;
     } while (condicion);
 
-    float lambda = distancia_max / lista_const.size();
+    float lambda = calcular_lambda(cl_set, lista_const.size());
     float desviacion, desv_temporal, f_act, f_ini, mejordesv;
     int infeasibility, infe_temporal, mejorinf;
     float mejorf = calcular_f(cl_set, s, lista_const, k, lambda, &desviacion, &infeasibility);
@@ -1730,6 +1522,110 @@ void ils(vector<vector<float>> *cl_set, vector<vector<int>> *cl_set_const, int k
             mejordesv = desviacion;
             mejorinf = infeasibility;
         }
+    }
+
+    tiempo2 = clock();
+
+    cout << mejordesv << " ";
+    cout << mejorinf << " ";
+    cout << mejorf << " ";
+    cout << (float)tiempo2 / CLOCKS_PER_SEC - (float)tiempo1 / CLOCKS_PER_SEC << endl;
+}
+
+void ils_es(vector<vector<float>> *cl_set, vector<vector<int>> *cl_set_const, int k, vector<int> seed)
+{
+
+    time_t tiempo1, tiempo2;
+
+    tiempo1 = clock();
+
+    //Infeasibility en lista
+
+    vector<restriccion> lista_const = calcular_list_const(cl_set_const);
+
+    //Crear solución aleatoria
+
+    vector<int> s, sp, indices, mejorsol;
+    bool condicion;
+    srand(seed[0]);
+    do
+    {
+        s.clear();
+        for (int i = 0; i < (*cl_set).size(); i++)
+            s.push_back(rand() % k);
+        condicion = count(s.begin(), s.end(), 0) == 0;
+        for (int i = 1; i < k && !condicion; i++)
+            condicion || count(s.begin(), s.end(), i) == 0;
+    } while (condicion);
+
+    float lambda = calcular_lambda(cl_set, lista_const.size());
+    float desviacion, desv_temporal, f_act, f_ini, mejordesv, delta_f;
+    int infeasibility, infe_temporal, mejorinf, indice;
+    float mejorf = calcular_f(cl_set, s, lista_const, k, lambda, &desviacion, &infeasibility);
+    f_ini = mejorf;
+
+    float T_i = 0.3*f_ini/-log(0.3);
+    float T=T_i;
+    float T_f=0.001;
+    while(T_f>=T_i) T_f = T_f/10;
+    float max_vecinos = 8*s.size(), eval = 1;
+    float cont_ex, max_ex = 0.1*max_vecinos;
+
+    for (int i = 0; i < s.size(); i++)
+        indices.push_back(i);
+
+    for (int a = 0; a < 10; a++)
+    {
+        //Mutacion
+
+        random_shuffle(indices.begin(), indices.end());
+
+        for (int i = 0; i < s.size() * 0.1; i++)
+            s[indices[i]] = (s[indices[i]] + rand() % (k - 1) + 1) % k;
+        
+        do
+        {
+            cont_ex = 0;
+            for (int i = 0; i < max_vecinos;i++){
+                sp = s;
+
+                // Operador de vecino
+
+                indice = rand()%sp.size();
+                sp[indice] = (sp[indice] + rand() % (k - 1) + 1) % k;
+
+                // Variación de soluciones
+
+                f_act = calcular_f(cl_set, sp, lista_const, k, lambda, &desviacion, &infeasibility);
+                eval++;
+                delta_f = f_act - f_ini;
+                //cout << delta_f << endl;
+
+                // Comparación
+
+                if(delta_f < 0 || fRand(0,1) <= exp((-delta_f)/T)){
+                    //cout << mejorf;
+                    s = sp;
+                    f_ini = f_act;
+                    if(f_act < mejorf){
+                        mejorsol = s;
+                        mejorf = f_act;
+                        mejordesv = desviacion;
+                        mejorinf = infeasibility;
+                    }
+                    cont_ex++;
+                    //cout << " " << mejorf << endl;
+                }
+                if(cont_ex > max_ex) break;
+            }
+            //cout << f_ini << endl;
+            // Enfriar
+            T = cauchy_cooling_scheme(T,T_i,T_f,max_vecinos);
+            //T = proportional_cooling_scheme(T,0.9);
+            
+            //cout << T << endl;
+        } while (eval < 10000 && cont_ex > 0 && T>=T_f);
+        
     }
 
     tiempo2 = clock();
@@ -1882,6 +1778,26 @@ int main(int argc, char *argv[])
         bmb(&cl_set, &cl_set_const, k, seed);
     else if (algoritmo == 11)
         ils(&cl_set, &cl_set_const, k, seed);
+    else if (algoritmo == 12)
+        ils_es(&cl_set, &cl_set_const, k, seed);
+    else if (algoritmo == -1){
+        // Pruebas
+
+        vector<restriccion> lista_const = calcular_list_const(&cl_set_const);
+
+        float lambda = calcular_lambda(&cl_set, lista_const.size());
+
+        int vec[] = {0,1,1,2,1,1,2,0,2,0,2,1,2,0,0,2,0,1,2,1,1,2,2,0,1,1,1,0,2,2,1,1,0,0,0,2,1,0,1,2,1,2,0,1,1,0,0,0,2,0,2,2,0,2,1,1,1,0,0,1,1,1,1,1,1,1,0,1,1,0,0,1,1,1,0,0,2,0,0,1,2,2,2,2,2,2,1,2,2,2,0,2,0,0,0,2,1,1,2,2,1,0,2,0,1,2,0,1,1,2,0,0,2,2,1,1,1,2,2,0,2,0,1,0,0,2,2,2,0,0,2,1,1,2,0,2,0,0,2,2,0,0,0,2,1,0,1,2,0,1};
+        vector<int> sol(vec, vec+sizeof(vec) / sizeof(int));
+
+        float desviacion;
+        int infeasibility;
+        float f_ini = calcular_f(&cl_set, sol, lista_const, k, lambda, &desviacion, &infeasibility);
+
+        cout << "f: " << f_ini << endl;
+        cout << "desv: " << desviacion << endl;
+        cout << "inf: " << infeasibility << endl;
+    }
 
     return 0;
 }
